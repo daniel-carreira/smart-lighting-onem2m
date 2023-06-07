@@ -64,7 +64,7 @@ onem2m.create_resource(LIGHTBULB_CNT, request_body)
 print("[NMAP]: Searching for smart switches...")
 
 smart_device_ips = discovery.discover_ips_on_port(local_ip, 8000)
-smart_switch_ips = [ smart_device_ip for smart_device_ip in smart_device_ips if onem2m.get_resource(f"http://{smart_device_ip}:8000/onem2m/smartswitch") is not None ]
+smart_switch_ips = [ smart_device_ip for smart_device_ip in smart_device_ips if onem2m.get_resource(f"http://{smart_device_ip}:8000/onem2m/switch") is not None ]
 
 print("[NMAP]:", smart_switch_ips)
 
