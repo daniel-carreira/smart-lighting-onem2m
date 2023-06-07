@@ -37,7 +37,7 @@ onem2m.delete_resource(SWITCH_AE)
 # Create AE
 request_body = {
     "m2m:ae": {
-        "api": "switch",
+        "api": "N.switch",
         "rn": "switch",
         "rr": "true"
     }
