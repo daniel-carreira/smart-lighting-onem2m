@@ -56,6 +56,17 @@ request_body = {
 onem2m.create_resource(SWITCH_AE, request_body)
 
 
+# ==================== CREATE CIN ====================
+
+request_body = {
+    "m2m:cin": {
+        "cnf": "text/plain:0",
+        "con": "{\"controlledLight\": \"x.x.x.x\"}"
+    }
+}
+onem2m.create_resource(SWITCH_CNT, request_body)
+
+
 # ==================== DISCOVER SMART LIGHTBULBS ====================
 
 print("[NMAP]: Searching for smart lightbulbs...")

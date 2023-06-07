@@ -39,7 +39,7 @@ onem2m.create_resource(CSE_BASE, request_body)
 # ==================== CREATE CNT ====================
 
 request_body = {
-     "m2m:cnt": {
+    "m2m:cnt": {
         "mbs": 10000,
         "mni": 50,
         "rn": "state"
