@@ -2,6 +2,7 @@ import utils.discovery as discovery
 import utils.onem2m as onem2m
 import paho.mqtt.client as mqtt
 from flask import Flask, render_template, request, redirect, jsonify
+import json
 
 app = Flask(__name__)
 
@@ -20,6 +21,8 @@ app = Flask(__name__)
 
 local_ip = discovery.get_local_ip()
 
+# local_ip = "10.79.12.243"
+
 
 # ==================== CREATE AE ====================
 
@@ -34,7 +37,7 @@ onem2m.delete_resource(SWITCH_AE)
 # Create AE
 request_body = {
     "m2m:ae": {
-        "api": "N.switch",
+        "api": "switch",
         "rn": "switch",
         "rr": "true"
     }

@@ -9,9 +9,10 @@ def get_local_ip():
 def discover_ips_on_port(local_ip, port):
     network_prefix = '.'.join(local_ip.split('.')[:-1])
     target_ip = f"{network_prefix}.0/24"
-    
+    print(target_ip)
     nm = nmap.PortScanner()
-    nm.scan(hosts=target_ip, arguments=f'-n -sS -p {port}')
+    nm.scan(hosts=target_ip, arguments=f'-p {port}')
+    print(nm.all_hosts())
     ips = [host for host in nm.all_hosts() if nm[host].has_tcp(port) and nm[host]['tcp'][port]['state'] == 'open' and host != local_ip]
-
+    
     return ips

@@ -15,7 +15,6 @@ import paho.mqtt.client as mqtt
 
 local_ip = discovery.get_local_ip()
 
-
 # ==================== CREATE AE ====================
 
 # Constants
@@ -29,7 +28,7 @@ onem2m.delete_resource(LIGHTBULB_AE)
 # Create AE
 request_body = {
     "m2m:ae": {
-        "api": "N.lightbulb",
+        "api": "lightbulb",
         "rn": "lightbulb",
         "rr": "true"
     }
