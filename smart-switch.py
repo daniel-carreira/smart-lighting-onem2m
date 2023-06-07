@@ -1,13 +1,16 @@
 import utils.discovery as discovery
 import utils.onem2m as onem2m
 import paho.mqtt.client as mqtt
+from flask import Flask, render_template, request, redirect, jsonify
+
+app = Flask(__name__)
 
 # ------- Procedure List -------
 # 1. Find Local IP
 # 2. Create AE (delete if exists)
 # 3. Create CNT
-# 4. Create CIN
-# 5. Discover Smart Lightbulbs
+# 4. Discover Smart Lightbulbs
+# 5. Create CIN
 # 6. Subscribe to all Smart Lightbulbs
 # 7. Smart Lightbulb listener
 # 8. Smart Switch controls
@@ -50,17 +53,6 @@ request_body = {
 onem2m.create_resource(SWITCH_AE, request_body)
 
 
-# ==================== CREATE CIN ====================
-
-request_body = {
-    "m2m:cin": {
-        "cnf": "text/plain:0",
-        "con": "{\"controlledLight\": \"10.79.12.150\"}"
-    }
-}
-onem2m.create_resource(SWITCH_CNT, request_body)
-
-
 # ==================== DISCOVER SMART LIGHTBULBS ====================
 
 print("[NMAP]: Searching for smart lightbulbs...")
@@ -87,44 +79,88 @@ for smart_lightbulb_ip in smart_lightbulb_ips:
     subscribe_lightbulb(smart_lightbulb_ip)
 
 
-# ==================== SMART LIGHTBULB LISTENER ====================
+# ==================== WEB SMART SWITCH CONTROL ====================
 
-client = mqtt.Client()
+@app.route('/')
+def home():
+    return render_template('index.html')
 
-topic = "discovery"
-smart_lightbulb_ips = set(smart_lightbulb_ips)
-
-def on_connect(client, userdata, flags, rc):
-    if rc == 0:
-        # Publish a message after successful connection
-        client.subscribe(topic)
-    else:
-        print(f"[MQTT]: Listening for new smart lightbulbs...")
-
-def on_message(client, userdata, message):
-    if topic != message.topic:
-        return
+# Toggle route
+@app.route('/toggle', methods=['POST'])
+def toggle():
+    # Get Last State of Lightbulb
+    bulb_ip = request.form.get('bulb_ip')
+    BULB_CNT = f"http://{bulb_ip}:8000/onem2m/lightbulb/state"
+    last_bulb_state = onem2m.get_resource(f"{BULB_CNT}/la")
     
-    global smart_lightbulb_ips
-    ip = message.payload.decode('utf-8')
-    smart_lightbulb_ips.add(ip)
+    # Toggle State of Lightbulb
+    last_bulb_state["m2m:cin"]["con"]["state"] = "on" if last_bulb_state["m2m:cin"]["con"]["state"] == "off" else "off"
+    created = onem2m.create_resource(BULB_CNT, last_bulb_state)
 
-    print(f"[MQTT]: {ip} found")
+    return jsonify(created)
 
-client.on_connect = on_connect
-client.on_message = on_message
+# Toggle route
+@app.route('/next', methods=['POST'])
+def next():
+    # Find IP in List
+    bulb_ip = request.form.get('bulb_ip')
+    index = smart_lightbulb_ips.find(bulb_ip)
 
-client.connect(local_ip)
+    # Find next IP
+    next = index + 1
+    next = 0 if next == len(smart_lightbulb_ips) else next
+    next_bulb_ip = smart_lightbulb_ips[next]
 
-client.loop_start()
+    # Change to the next Lightbulb
+    last_switch_state = onem2m.get_resource(f"{SWITCH_CNT}/la")
+    last_switch_state["m2m:cin"]["con"]["controlledLight"] = next_bulb_ip
+    created = onem2m.create_resource(SWITCH_CNT, last_switch_state)
 
+    return jsonify(created)
 
-# ==================== SMART SWITCH CONTROLS ====================
+if __name__ == '__main__':
+    # Start the MQTT client loop in a separate thread
 
+    client = mqtt.Client()
+
+    topic = "discovery"
+    smart_lightbulb_ips = set(smart_lightbulb_ips)
+
+    def on_connect(client, userdata, flags, rc):
+        if rc == 0:
+            # Publish a message after successful connection
+            client.subscribe(topic)
+        else:
+            print(f"[MQTT]: Listening for new smart lightbulbs...")
+
+    def on_message(client, userdata, message):
+        if topic != message.topic:
+            return
+        
+        global smart_lightbulb_ips
+        ip = message.payload.decode('utf-8')
+        smart_lightbulb_ips.add(ip)
+
+        print(f"[MQTT]: {ip} found")
+
+    client.on_connect = on_connect
+    client.on_message = on_message
+
+    client.connect(local_ip)
+
+    client.loop_start()
+
+    # Run Flask app on port 8080
+    app.run(host='0.0.0.0', port=8080)
+
+    client.loop_stop()
+
+"""
+# ==================== CLI SMART SWITCH CONTROLS ====================
 try:
     while True:
-        if len(smart_lightbulb_ips) == 0:
-            exit()
+        while len(smart_lightbulb_ips) == 0:
+            pass
         
         last_switch_state = onem2m.get_resource(f"{SWITCH_CNT}/la")
         bulb_ip = last_switch_state["m2m:cin"]["con"]["controlledLight"]
@@ -160,5 +196,4 @@ try:
 
 except KeyboardInterrupt:
     pass
-
-client.loop_stop()
+"""
