@@ -1,10 +1,13 @@
 import utils.discovery as discovery
 import utils.onem2m as onem2m
-import paho.mqtt.client as mqtt
-from flask import Flask, render_template, request, redirect, jsonify
-import json
+from app import Flask, render_template, request, jsonify
+from flask_cors import CORS
+import websockets
+import re
+import asyncio
 
 app = Flask(__name__)
+CORS(app, origins='*', methods=['GET', 'POST'], allow_headers='Content-Type')
 
 # ------- Procedure List -------
 # 1. Find Local IP
@@ -20,8 +23,6 @@ app = Flask(__name__)
 # ==================== FIND LOCAL IP ====================
 
 local_ip = discovery.get_local_ip()
-
-# local_ip = "10.79.12.243"
 
 
 # ==================== CREATE AE ====================
@@ -56,17 +57,6 @@ request_body = {
 onem2m.create_resource(SWITCH_AE, request_body)
 
 
-# ==================== CREATE CIN ====================
-
-request_body = {
-    "m2m:cin": {
-        "cnf": "text/plain:0",
-        "con": "{\"controlledLight\": \"x.x.x.x\"}"
-    }
-}
-onem2m.create_resource(SWITCH_CNT, request_body)
-
-
 # ==================== DISCOVER SMART LIGHTBULBS ====================
 
 print("[NMAP]: Searching for smart lightbulbs...")
@@ -82,7 +72,7 @@ print("[NMAP]:", smart_lightbulb_ips)
 def subscribe_lightbulb(ip):
     REQUEST_BODY = {
         "m2m:sub": {
-            "nu": f"[\"mqtt://{local_ip}:1883\"]",
+            "nu": f"[\"ws://{local_ip}:8081\"]",
             "rn": "switch"
         }
     }
@@ -99,25 +89,45 @@ for smart_lightbulb_ip in smart_lightbulb_ips:
 def home():
     return render_template('index.html')
 
+# Discovered bulbs
+@app.route('/bulbs')
+def bulbs():
+
+    switch_state = onem2m.get_resource(f"{SWITCH_CNT}/la")
+    index = smart_lightbulb_ips.find(switch_state["m2m:cin"]["con"]["state"])
+    switch_state_ip = smart_lightbulb_ips[index]
+
+    response = []
+    for smart_lightbulb_ip in smart_lightbulb_ips:
+        is_current = switch_state_ip == smart_lightbulb_ip
+        data = onem2m.get_resource(f"http://{smart_lightbulb_ip}:8000/onem2m/lightbulb")
+        obj = {
+            "ip": smart_lightbulb_ip,
+            "state": data["m2m:cin"]["con"]["state"],
+            "current": is_current
+        }
+        response.append(obj)
+    
+    return jsonify(response)
+
 # Toggle route
 @app.route('/toggle', methods=['POST'])
 def toggle():
     # Get Last State of Lightbulb
-    bulb_ip = request.form.get('bulb_ip')
+    bulb_ip = request.form.get('ip')
     BULB_CNT = f"http://{bulb_ip}:8000/onem2m/lightbulb/state"
     last_bulb_state = onem2m.get_resource(f"{BULB_CNT}/la")
     
     # Toggle State of Lightbulb
     last_bulb_state["m2m:cin"]["con"]["state"] = "on" if last_bulb_state["m2m:cin"]["con"]["state"] == "off" else "off"
     created = onem2m.create_resource(BULB_CNT, last_bulb_state)
+    return jsonify({"state": created["m2m:cin"]["con"]["state"]})
 
-    return jsonify(created)
-
-# Toggle route
+# Next route
 @app.route('/next', methods=['POST'])
 def next():
     # Find IP in List
-    bulb_ip = request.form.get('bulb_ip')
+    bulb_ip = request.form.get('ip')
     index = smart_lightbulb_ips.find(bulb_ip)
 
     # Find next IP
@@ -126,48 +136,53 @@ def next():
     next_bulb_ip = smart_lightbulb_ips[next]
 
     # Change to the next Lightbulb
-    last_switch_state = onem2m.get_resource(f"{SWITCH_CNT}/la")
-    last_switch_state["m2m:cin"]["con"]["controlledLight"] = next_bulb_ip
-    created = onem2m.create_resource(SWITCH_CNT, last_switch_state)
+    switch_state = {
+        "m2m:cin": {
+            "cnf": "text/plain:0",
+            "con": {
+                "controlledLight": next_bulb_ip
+            }
+        }
+    }
+    created = onem2m.create_resource(SWITCH_CNT, switch_state)
+    return jsonify({"state": created["m2m:cin"]["con"]["state"]})
 
-    return jsonify(created)
+
+def is_valid_ipv4(ip):
+    pattern = r"^(\d{1,3}\.){3}\d{1,3}$"
+    if re.match(pattern, ip):
+        octets = ip.split(".")
+        if all(0 <= int(octet) <= 255 for octet in octets):
+            return True
+    return False
+
+
+# WEBSOCKET SERVER
+async def connect_websocket():
+    async with websockets.connect(f"ws://{local_ip}:8081") as websocket:
+        while True:
+            message = await websocket.recv()
+            if is_valid_ipv4(message):
+                global smart_lightbulb_ips
+                smart_lightbulb_ips.add(message)
+                print(f"[WS]: {message} found")
 
 if __name__ == '__main__':
-    # Start the MQTT client loop in a separate thread
 
-    client = mqtt.Client()
-
-    topic = "discovery"
     smart_lightbulb_ips = set(smart_lightbulb_ips)
 
-    def on_connect(client, userdata, flags, rc):
-        if rc == 0:
-            # Publish a message after successful connection
-            client.subscribe(topic)
-        else:
-            print(f"[MQTT]: Listening for new smart lightbulbs...")
+    loop = asyncio.get_event_loop()
+    tasks = [
+        loop.create_task(connect_websocket()),
+        loop.run_in_executor(None, app.run, ('0.0.0.0', 8080))
+    ]
 
-    def on_message(client, userdata, message):
-        if topic != message.topic:
-            return
-        
-        global smart_lightbulb_ips
-        ip = message.payload.decode('utf-8')
-        smart_lightbulb_ips.add(ip)
-
-        print(f"[MQTT]: {ip} found")
-
-    client.on_connect = on_connect
-    client.on_message = on_message
-
-    client.connect(local_ip)
-
-    client.loop_start()
-
-    # Run Flask app on port 8080
-    app.run(host='0.0.0.0', port=8080)
-
-    client.loop_stop()
+    try:
+        loop.run_until_complete(asyncio.gather(*tasks))
+    except KeyboardInterrupt:
+        pass
+    finally:
+        loop.close()
 
 """
 # ==================== CLI SMART SWITCH CONTROLS ====================
