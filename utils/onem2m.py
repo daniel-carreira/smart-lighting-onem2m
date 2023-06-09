@@ -25,14 +25,15 @@ def delete_resource(url):
 
 def create_resource(url, data):
     try:
-        headers = { "Content-Type": "application/json"}
-        response = requests.post(url, headers=headers, data=json.dumps(data))
+        headers = {"Content-Type": "application/json"}
+        response = requests.post(url, headers=headers, data=json.dumps(data).encode('utf-8'))
         if response.status_code == 200 or response.status_code == 201:
             print(f"[ONEM2M]: Resource '{url}' created successfully")
-            return json.loads(response.text)
+            return response.json()
         else:
-            print(f"[ONEM2M]: Could't create the resource '{url}'")
+            print(f"[ONEM2M]: Couldn't create the resource '{url}'")
             return None
     except:
-        print(f"[ONEM2M]: Could't create the resource '{url}'")
+        print(f"[ONEM2M]: Couldn't create the resource '{url}'")
         return None
+    

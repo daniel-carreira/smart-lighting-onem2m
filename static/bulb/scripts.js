@@ -1,5 +1,5 @@
-const API_URL = 'http://localhost:8080'
-const WS_URL = 'ws://localhost:8080'
+const API_URL = 'http://10.79.12.230:8080'
+const WS_URL = 'ws://10.79.12.230:8080'
 
 // Socket IO
 var socket = io(WS_URL);
@@ -26,8 +26,8 @@ async function getState() {
 	axios
 		.get("state")
 		.then(function (response) {
-      isON = response.data["m2m:cin"]["con"]["state"] == "on"
-			lightStateElement.textContent = response.data["m2m:cin"]["con"]["state"].toUpperCase()
+      isON = response.data["m2m:cin"]["con"] == "on"
+			lightStateElement.textContent = response.data["m2m:cin"]["con"].toUpperCase()
       faviconElement.href = isON ? "/static/icons/light-on.png" : "/static/icons/light-off.png"
 		})
 		.catch(function (error) {

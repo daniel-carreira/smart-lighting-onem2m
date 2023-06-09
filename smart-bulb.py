@@ -5,6 +5,7 @@ from flask_socketio import SocketIO, emit
 from flask_cors import CORS
 import paho.mqtt.client as mqtt
 import uuid
+import json
 
 app = Flask(__name__)
 CORS(app, origins='*', methods=['GET', 'POST'], allow_headers='Content-Type')
@@ -22,6 +23,7 @@ socketio = SocketIO(app)
 # ==================== FIND LOCAL IP ====================
 
 local_ip = discovery.get_local_ip()
+print("Local IP: " + str(local_ip))
 
 
 # ==================== CREATE AE ====================
@@ -61,13 +63,14 @@ onem2m.create_resource(LIGHTBULB_AE, request_body)
 
 request_body = {
     "m2m:cin": {
-        "cnf": "text/plain:0",
-        "con": "{\"state\": \"off\"}",
+        "cnf": "application/json",
+        "con": 'off',
         "rn": f"{local_ip}_{uuid.uuid4()}"
     }
 }
-onem2m.create_resource(LIGHTBULB_CNT, request_body)
 
+ola = onem2m.create_resource(LIGHTBULB_CNT, request_body)
+print(ola)
 
 # ==================== CREATE SUB ====================
 
@@ -99,7 +102,8 @@ def home():
 @app.route('/state')
 def state():
     last_bulb_state = onem2m.get_resource(f"{LIGHTBULB_CNT}/la")
-    return jsonify({"state": last_bulb_state["m2m:cin"]["con"]["state"]})
+    state = last_bulb_state["m2m:cin"]["con"]
+    return jsonify({"state": state})
 
 @socketio.on('connect')
 def on_connect():
@@ -107,6 +111,8 @@ def on_connect():
     socketio.emit('add-lightbulb', local_ip)
     print(f"[WebSocket]: Message sent \"{local_ip}\"")
 
+
+# ==================== MAIN ====================
 
 if __name__ == '__main__':
 
@@ -134,6 +140,6 @@ if __name__ == '__main__':
     client.connect(local_ip)
     client.loop_start()
 
-    app.run(host='0.0.0.0', port=8080)
+    socketio.run(app, host='0.0.0.0', port=8080)
 
     client.loop_stop()
