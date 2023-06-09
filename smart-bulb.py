@@ -1,6 +1,11 @@
 import utils.discovery as discovery
 import utils.onem2m as onem2m
-import paho.mqtt.client as mqtt
+from flask import Flask, render_template, jsonify
+from flask_cors import CORS
+import websocket
+
+app = Flask(__name__)
+CORS(app, origins='*', methods=['GET', 'POST'], allow_headers='Content-Type')
 
 # ------- Procedure List -------
 # 1. Find Local IP
@@ -14,6 +19,7 @@ import paho.mqtt.client as mqtt
 # ==================== FIND LOCAL IP ====================
 
 local_ip = discovery.get_local_ip()
+
 
 # ==================== CREATE AE ====================
 
@@ -71,31 +77,27 @@ print("[NMAP]:", smart_switch_ips)
 
 # ==================== NOTIFY PRESENCE TO ALL SMART SWITCHES VIA WEBSOCKETS ====================
 
-client = mqtt.Client()
+@app.route('/')
+def home():
+    return render_template('bulb/index.html')
 
-topic = "discovery"
-num_published = 0
-total_publishes = len(smart_switch_ips)
+@app.route('/state')
+def state():
+    last_bulb_state = onem2m.get_resource(f"{LIGHTBULB_CNT}/la")
+    return jsonify(last_bulb_state)
 
-def on_connect(client, userdata, flags, rc):
-    if rc == 0:
-        # Publish a message after successful connection
-        client.publish(topic, local_ip)
-    else:
-        print(f"[MQTT]: Device '{client._host}' doesn't have MQTT Broker running on port 1883")
+if __name__ == '__main__':
+    for smart_switch_ip in smart_switch_ips:
+        ws = websocket.WebSocketApp(f"ws://{smart_switch_ip}:8081")
+        def on_open(ws):
+            print(f"[WebSocket]: {smart_switch_ip} - Connection established")
+            ws.send(smart_switch_ip)
+            print(f"[WebSocket]: {smart_switch_ip} - Message sent \"{smart_switch_ip}\"")
 
-def on_publish(client, userdata, mid):
-    global num_published
-    num_published += 1
+        # Set the callback function
+        ws.on_open = on_open
 
-    if num_published == total_publishes:
-        print("[MQTT]: All smart switches were notified")
-        client.disconnect()
+        # Start the WebSocket connection
+        ws.run_forever()
 
-client.on_connect = on_connect
-client.on_publish = on_publish
-
-for smart_switch_ip in smart_switch_ips:
-    client.connect(smart_switch_ip)
-
-client.loop_forever()
+    app.run(host='0.0.0.0', port=8080)

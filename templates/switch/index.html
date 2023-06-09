@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>Switch</title>
+		<link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='icons/light-switch.png') }}">
+		<link rel="stylesheet" href="{{ url_for('static', filename='switch/styles.css') }}">
+	</head>
+	<body>
+		<div class="container-switch">
+			<h1>Looking for lightbulbs...</h1>
+		</div>
+		<div class="fixed-buttons" style="display: none;">
+			<div class="buttons" id="next">
+				<span>Next</span>
+			</div>
+			<div class="buttons" id="toggle">
+				<span>ON/OFF</span>
+			</div>
+		</div>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/1.1.3/axios.min.js"></script>
+		<script src="{{ url_for('static', filename='switch/scripts.js') }}"></script>
+	</body>
+</html>
