@@ -1,13 +1,14 @@
 import utils.discovery as discovery
 import utils.onem2m as onem2m
 from app import Flask, render_template, request, jsonify
+from flask_socketio import SocketIO, emit
 from flask_cors import CORS
-import websockets
 import re
 import asyncio
 
 app = Flask(__name__)
 CORS(app, origins='*', methods=['GET', 'POST'], allow_headers='Content-Type')
+socketio = SocketIO(app)
 
 # ------- Procedure List -------
 # 1. Find Local IP
@@ -72,7 +73,7 @@ print("[NMAP]:", smart_lightbulb_ips)
 def subscribe_lightbulb(ip):
     REQUEST_BODY = {
         "m2m:sub": {
-            "nu": f"[\"ws://{local_ip}:8081\"]",
+            "nu": f"[\"mqtt://{local_ip}:1883\"]",
             "rn": "switch"
         }
     }
@@ -92,7 +93,6 @@ def home():
 # Discovered bulbs
 @app.route('/bulbs')
 def bulbs():
-
     switch_state = onem2m.get_resource(f"{SWITCH_CNT}/la")
     index = smart_lightbulb_ips.find(switch_state["m2m:cin"]["con"]["state"])
     switch_state_ip = smart_lightbulb_ips[index]
@@ -156,16 +156,34 @@ def is_valid_ipv4(ip):
             return True
     return False
 
+def setup_mqtt():
+    client = mqtt.Client()
 
-# WEBSOCKET SERVER
-async def connect_websocket():
-    async with websockets.connect(f"ws://{local_ip}:8081") as websocket:
-        while True:
-            message = await websocket.recv()
-            if is_valid_ipv4(message):
-                global smart_lightbulb_ips
-                smart_lightbulb_ips.add(message)
-                print(f"[WS]: {message} found")
+    topic = "discovery"
+    smart_lightbulb_ips = set(smart_lightbulb_ips)
+
+    def on_connect(client, userdata, flags, rc):
+        if rc == 0:
+            # Publish a message after successful connection
+            client.subscribe(topic)
+        else:
+            print(f"[MQTT]: Listening for new smart lightbulbs...")
+
+    def on_message(client, userdata, message):
+        if topic != message.topic:
+            return
+        
+        global smart_lightbulb_ips
+        ip = message.payload.decode('utf-8')
+        smart_lightbulb_ips.add(ip)
+
+        print(f"[MQTT]: {ip} found")
+
+    client.on_connect = on_connect
+    client.on_message = on_message
+
+    client.connect(local_ip)
+
 
 if __name__ == '__main__':
 
@@ -173,8 +191,9 @@ if __name__ == '__main__':
 
     loop = asyncio.get_event_loop()
     tasks = [
+        loop.create_task(setup_mqtt()),
         loop.create_task(connect_websocket()),
-        loop.run_in_executor(None, app.run, ('0.0.0.0', 8080))
+        loop.run_in_executor(None, socketio.run, (app, '0.0.0.0', 8080))
     ]
 
     try:

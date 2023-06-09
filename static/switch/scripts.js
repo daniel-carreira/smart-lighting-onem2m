@@ -16,14 +16,12 @@ const socket = new WebSocket(WS_URL);
 // Connection established event
 socket.addEventListener('open', () => {
   console.log('Connected to the WebSocket server');
-
-  // Send a message to the server
-  socket.send('Hello, server!');
 });
 
 // Message received event
 socket.addEventListener('message', (event) => {
   const message = event.data;
+
   console.log(`Received message: ${message}`);
 });
 
@@ -35,6 +33,48 @@ socket.addEventListener('close', () => {
 let currentIndex = 0;
 let smartBulbs = [];
 
+function createBulb(bulb, index) {
+  isON = bulb.state == "on"
+
+  // Create Lightbulb Div
+  const bulbContainer = document.createElement("div")
+  bulbContainer.classList.add("container-lightbulb")
+
+  // Add the "current" class
+  if (bulb.current) {
+    currentIndex = index
+    bulbContainer.classList.add("current")
+  }
+
+  // Create the smart-bulb label
+  const bulbLabel = document.createElement("h2")
+  bulbLabel.textContent = bulb.ip
+  bulbContainer.appendChild(bulbLabel)
+
+  // Create the smart-bulb image
+  const bulbImg = document.createElement("img")
+  bulbImg.src = isON ? "/static/icons/light-on.png" : "/static/icons/light-off.png"
+  bulbContainer.appendChild(bulbImg)
+
+  // Append the smart-bulb container to the container element
+  containerElement.appendChild(bulbContainer)
+}
+
+function removeBulb(index) {
+  
+}
+
+function updateUI() {
+  if (smartBulbs.length > 0) {
+    lookingElement.style.display = "none"
+    actionButtonsElement.style.display = "inline"
+  }
+  else {
+    lookingElement.style.display = "inline"
+    actionButtonsElement.style.display = "none"
+  }
+}
+
 // Get Current Bulbs
 async function getBulb() {
 	return axios
@@ -42,36 +82,10 @@ async function getBulb() {
 		.then(function (response) {
       smartBulbs = response.data
 
-      if (smartBulbs.length > 0) {
-        lookingElement.style.display = "none"
-        actionButtonsElement.style.display = "inline"
-      }
+      updateUI()
 
       smartBulbs.forEach((bulb, index) => {
-        isON = bulb.state == "on"
-
-        // Create Lightbulb Div
-        const bulbContainer = document.createElement("div");
-        bulbContainer.classList.add("container-lightbulb");
-
-        // Add the "current" class
-        if (bulb.current) {
-          currentIndex = index
-          bulbContainer.classList.add("current");
-        }
-
-        // Create the smart-bulb label
-        const bulbLabel = document.createElement("h2");
-        bulbLabel.textContent = bulb.ip;
-        bulbContainer.appendChild(bulbLabel);
-
-        // Create the smart-bulb image
-        const bulbImg = document.createElement("img");
-        bulbImg.src = isON ? "/static/icons/light-on.png" : "/static/icons/light-off.png"
-        bulbContainer.appendChild(bulbImg);
-
-        // Append the smart-bulb container to the container element
-        containerElement.appendChild(bulbContainer);
+        createBulb(bulb, index)
       })
 		})
 		.catch(error => {

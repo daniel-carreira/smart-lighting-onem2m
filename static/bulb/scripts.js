@@ -30,15 +30,14 @@ const socket = new WebSocket(WS_URL);
 // Connection established event
 socket.addEventListener('open', () => {
   console.log('Connected to the WebSocket server');
-
-  // Send a message to the server
-  socket.send('Hello, server!');
 });
 
 // Message received event
 socket.addEventListener('message', (event) => {
   const message = event.data;
-  console.log(`Received message: ${message}`);
+  isON = message == "on"
+  lightStateElement.textContent = message.toUpperCase()
+  faviconElement.href = isON ? "/static/icons/light-on.png" : "/static/icons/light-off.png"
 });
 
 // Connection closed event
