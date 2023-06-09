@@ -1,6 +1,6 @@
 import utils.discovery as discovery
 import utils.onem2m as onem2m
-from app import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
 import websockets
 import re

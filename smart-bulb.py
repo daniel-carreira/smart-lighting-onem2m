@@ -2,7 +2,7 @@ import utils.discovery as discovery
 import utils.onem2m as onem2m
 from flask import Flask, render_template, jsonify
 from flask_cors import CORS
-import websocket
+import websockets
 
 app = Flask(__name__)
 CORS(app, origins='*', methods=['GET', 'POST'], allow_headers='Content-Type')

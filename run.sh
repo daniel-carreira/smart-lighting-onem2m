@@ -1,14 +1,25 @@
 #!/bin/bash
 
+# Check if port 1883 is open and not occupied
+if ! lsof -i :1883 > /dev/null; then
+  echo "[1883] - Running MQTT server"
+  ./mqtt-server &
+else
+  echo "[1883] - occupied. Cannot start MQTT server"
+fi
+
+if ! lsof -i :8000 > /dev/null; then
+  echo "[8000] - Running TinyOneM2M instance"
+  cd TinyOneM2M
+  ./server.o &
+  sleep 1
+  cd ..
+else
+  echo "[8000] - occupied. Cannot start TinyOneM2M instance."
+fi
+
 # Check the argument and run the corresponding Python script
 if [ "$1" == "switch" ]; then
-  # Check if port 1883 is open and not occupied
-  if ! sudo lsof -i :1883 > /dev/null; then
-    ./mqtt-server &
-  else
-    echo "Port 1883 is either open or occupied. Cannot start the MQTT server for switch."
-  fi
-
   # Run smart-switch.py
   python smart-switch.py
 elif [ "$1" == "bulb" ]; then
