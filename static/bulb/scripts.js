@@ -26,9 +26,9 @@ async function getState() {
 	axios
 		.get("state")
 		.then(function (response) {
-      isON = response.data["m2m:cin"]["con"]["state"] == "on"
-			lightStateElement.textContent = response.data["m2m:cin"]["con"]["state"].toUpperCase()
-      faviconElement.href = isON ? "/static/icons/light-on.png" : "/static/icons/light-off.png"
+			isON = response.data["state"] == "on"
+			lightStateElement.textContent = response.data["state"].toUpperCase()
+			faviconElement.href = isON ? "/static/icons/light-on.png" : "/static/icons/light-off.png"
 		})
 		.catch(function (error) {
 			console.log(error)
