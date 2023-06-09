@@ -62,7 +62,7 @@ onem2m.create_resource(LIGHTBULB_AE, request_body)
 request_body = {
     "m2m:cin": {
         "cnf": "text/plain:0",
-        "con": "{\"state\": \"off\"}",
+        "con": "off",
         "rn": f"{local_ip}_{uuid.uuid4()}"
     }
 }
@@ -99,7 +99,7 @@ def home():
 @app.route('/state')
 def state():
     last_bulb_state = onem2m.get_resource(f"{LIGHTBULB_CNT}/la")
-    return jsonify({"state": last_bulb_state["m2m:cin"]["con"]["state"]})
+    return jsonify({"state": last_bulb_state["m2m:cin"]["con"]})
 
 @socketio.on('connect')
 def on_connect():
@@ -112,19 +112,19 @@ if __name__ == '__main__':
 
     # MQTT
     client = mqtt.Client()
+    topic = "onem2m/lightbulb/state/self-sub"
 
     def on_connect(client, userdata, flags, rc):
         if rc == 0:
-            client.subscribe("onem2m/lightbulb/state/self-sub")
+            client.subscribe(topic)
             print(f"[MQTT]: Listening for changes...")
 
     def on_message(client, userdata, message):
-        if message.topic != "onem2m/lightbulb/state/self-sub":
+        if message.topic != topic:
             return
         
         state = message.payload.decode('utf-8')
         socketio.emit('state', state)
-        global smart_lightbulb_ips
 
         print(f"[MQTT]: State {state}")
 
@@ -134,6 +134,6 @@ if __name__ == '__main__':
     client.connect(local_ip)
     client.loop_start()
 
-    app.run(host='0.0.0.0', port=8080)
+    socketio.run(app, host='0.0.0.0', port=8080)
 
     client.loop_stop()

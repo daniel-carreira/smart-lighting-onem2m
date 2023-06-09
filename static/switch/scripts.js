@@ -1,5 +1,5 @@
 const API_URL = 'http://localhost:8080'
-const WS_URL = 'ws://localhost:8081'
+const WS_URL = 'ws://localhost:8080'
 
 const lookingElement = document.getElementsByTagName("h1")[0]
 const containerElement = document.getElementsByClassName("container-switch")[0]
@@ -10,24 +10,10 @@ axios.defaults.baseURL = API_URL
 axios.defaults.headers.post['Content-Type'] = 'application/json';
 axios.defaults.headers.post['Accept'] = 'application/json'
 
-// Web Sockets
-const socket = new WebSocket(WS_URL);
-
-// Connection established event
-socket.addEventListener('open', () => {
-  console.log('Connected to the WebSocket server');
-});
-
-// Message received event
-socket.addEventListener('message', (event) => {
-  const message = event.data;
-
-  console.log(`Received message: ${message}`);
-});
-
-// Connection closed event
-socket.addEventListener('close', () => {
-  console.log('Connection closed');
+// Socket IO
+var socket = io(WS_URL);
+socket.on('connect', () => {
+  console.log("Connection established")
 });
 
 let currentIndex = 0;
@@ -60,10 +46,6 @@ function createBulb(bulb, index) {
   containerElement.appendChild(bulbContainer)
 }
 
-function removeBulb(index) {
-  
-}
-
 function updateUI() {
   if (smartBulbs.length > 0) {
     lookingElement.style.display = "none"
@@ -73,6 +55,22 @@ function updateUI() {
     lookingElement.style.display = "inline"
     actionButtonsElement.style.display = "none"
   }
+}
+
+function updateBulb(ip, state) {
+  index = 0
+  smartBulbs.forEach((item, idx) => {
+    if (item.ip == ip) {
+      index = idx
+      return
+    }
+  })
+  let containers = document.querySelectorAll(".container-lightbulb");
+  to_update = containers[index]
+
+  imgElem = to_update.getElementsByTagName("img")[0]
+  isON = state == "on"
+  imgElem.src = isON ? "/static/icons/light-on.png" : "/static/icons/light-off.png"
 }
 
 // Get Current Bulbs
@@ -85,6 +83,10 @@ async function getBulb() {
       updateUI()
 
       smartBulbs.forEach((bulb, index) => {
+        socket.on(bulb.ip, (message) => {
+          console.log(`Room "${bulb.ip}": ${message}`)
+          updateBulb(bulb.ip, message)
+        })
         createBulb(bulb, index)
       })
 		})

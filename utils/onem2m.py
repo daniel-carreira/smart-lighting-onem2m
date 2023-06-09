@@ -29,7 +29,7 @@ def create_resource(url, data):
         response = requests.post(url, headers=headers, data=json.dumps(data))
         if response.status_code == 200 or response.status_code == 201:
             print(f"[ONEM2M]: Resource '{url}' created successfully")
-            return json.loads(response.text)
+            return response.json()
         else:
             print(f"[ONEM2M]: Could't create the resource '{url}'")
             return None
