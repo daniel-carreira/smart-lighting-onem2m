@@ -1,15 +1,12 @@
 import utils.discovery as discovery
 import utils.onem2m as onem2m
 from flask import Flask, render_template, jsonify
-from flask_socketio import SocketIO, emit
 from flask_cors import CORS
 import paho.mqtt.client as mqtt
 import uuid
-import json
 
 app = Flask(__name__)
 CORS(app, origins='*', methods=['GET', 'POST'], allow_headers='Content-Type')
-socketio = SocketIO(app, cors_allowed_origins='*')
 
 # ------- Procedure List -------
 # 1. Find Local IP
@@ -17,7 +14,7 @@ socketio = SocketIO(app, cors_allowed_origins='*')
 # 3. Create CNT
 # 4. Create CIN
 # 5. Discover Smart Switches
-# 6. Notify presence to All Smart Switches via WebSockets
+# 6. Notify presence to All Smart Switches
 
 
 # ==================== FIND LOCAL IP ====================
@@ -91,7 +88,27 @@ smart_switch_ips = [ smart_device_ip for smart_device_ip in smart_device_ips if 
 print("[NMAP]:", smart_switch_ips)
 
 
-# ==================== NOTIFY PRESENCE TO ALL SMART SWITCHES VIA WEBSOCKETS ====================
+# ==================== NOTIFY PRESENCE TO ALL SMART SWITCHES ====================
+
+# MQTT
+client = mqtt.Client()
+topic = "discover"
+
+for ip in smart_switch_ips:
+    try:
+        # Connect to the broker
+        client.connect(ip, 1883)
+        client.loop_start()
+
+        # Publish the message
+        client.publish(topic, local_ip)
+
+        # Disconnect from the broker
+        client.disconnect()
+
+    except ConnectionRefusedError:
+        print("Connection refused to broker at IP:", ip)
+        continue
 
 @app.route('/')
 def home():
@@ -103,41 +120,6 @@ def state():
     print(last_bulb_state)
     return jsonify({"state": last_bulb_state["m2m:cin"]["con"]})
 
-@socketio.on('connect')
-def on_connect():
-    print(f"[WebSocket]: Connection established")
-    socketio.emit('add-lightbulb', local_ip)
-    print(f"[WebSocket]: Message sent \"{local_ip}\"")
-
-
 if __name__ == '__main__':
-
-    # MQTT
-    client = mqtt.Client()
-    topic = "/onem2m/lightbulb/state/self-sub"
-
-    def on_connect(client, userdata, flags, rc):
-        if rc == 0:
-            client.subscribe(topic)
-            print(f"[MQTT]: Listening for changes...")
-
-    def on_message(client, userdata, message):
-        if message.topic != topic:
-            return
-        
-        state = message.payload.decode('utf-8')
-        state_json = json.loads(message.payload)
-        print(state_json)
-        socketio.emit('state', state)
-
-        #print(f"[MQTT]: State {state}")
-
-    client.on_connect = on_connect
-    client.on_message = on_message
-
-    client.connect(local_ip)
-    client.loop_start()
-
-    socketio.run(app, host='0.0.0.0', port=8080)
-
-    client.loop_stop()
+    # Run HTTP Server
+    app.run(host='0.0.0.0', port=8080)

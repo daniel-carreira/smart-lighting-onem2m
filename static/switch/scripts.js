@@ -1,5 +1,5 @@
 const API_URL = 'http://localhost:8080'
-const WS_URL = 'ws://localhost:8080'
+const MQTT_URL = 'mqtt://localhost:1883'
 
 const lookingElement = document.getElementsByTagName("h1")[0]
 const containerElement = document.getElementsByClassName("container-switch")[0]
@@ -10,10 +10,33 @@ axios.defaults.baseURL = API_URL
 axios.defaults.headers.post['Content-Type'] = 'application/json';
 axios.defaults.headers.post['Accept'] = 'application/json'
 
-// Socket IO
-var socket = io(WS_URL);
-socket.on('connect', () => {
-  console.log("Connection established")
+// MQTT
+const client = mqtt.connect(MQTT_URL, { port: 1883 });
+
+client.on('connect', () => {
+  console.log('Connected to MQTT broker');
+});
+
+client.subscribe("#", (error) => {
+	if (error) {
+		console.error('Error subscribing to topic:', error);
+	} else {
+		console.log('Subscribed to topic:', topic);
+	}
+});
+
+client.on('message', (topic, message) => {
+  console.log(topic)
+  console.log(message)
+  /*
+  isON = message == "on"
+  lightStateElement.textContent = message.toUpperCase()
+  faviconElement.href = isON ? "/static/icons/light-on.png" : "/static/icons/light-off.png"
+  */
+});
+
+client.on('error', (error) => {
+  console.error('Error connecting to MQTT broker:', error);
 });
 
 let currentIndex = 0;

@@ -1,17 +1,34 @@
 const API_URL = 'http://localhost:8080'
-const WS_URL = 'ws://localhost:8080'
+const MQTT_URL = 'mqtt://localhost:1883'
 
-// Socket IO
-var socket = io(WS_URL);
-socket.on('connect', () => {
-  console.log("Connection established")
+// MQTT
+const client = mqtt.connect(MQTT_URL, { port: 1883 });
+
+client.on('connect', () => {
+  console.log('Connected to MQTT broker');
 });
 
-socket.on('state', (message) => {
+client.subscribe("#", (error) => {
+	if (error) {
+		console.error('Error subscribing to topic:', error);
+	} else {
+		console.log('Subscribed to topic:', topic);
+	}
+});
+
+client.on('message', (topic, message) => {
+  console.log(topic)
+  console.log(message)
+  /*
   isON = message == "on"
   lightStateElement.textContent = message.toUpperCase()
   faviconElement.href = isON ? "/static/icons/light-on.png" : "/static/icons/light-off.png"
-})
+  */
+});
+
+client.on('error', (error) => {
+  console.error('Error connecting to MQTT broker:', error);
+});
 
 // H1 Element
 const lightStateElement = document.getElementsByTagName("h1")[0]

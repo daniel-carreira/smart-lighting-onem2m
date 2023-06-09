@@ -1,13 +1,11 @@
 import utils.discovery as discovery
 import utils.onem2m as onem2m
 from flask import Flask, render_template, request, jsonify
-from flask_socketio import SocketIO, emit
 from flask_cors import CORS
 import paho.mqtt.client as mqtt
 
 app = Flask(__name__)
 CORS(app, origins='*', methods=['GET', 'POST'], allow_headers='Content-Type')
-socketio = SocketIO(app)
 
 # ------- Procedure List -------
 # 1. Find Local IP
@@ -72,7 +70,9 @@ print("[NMAP]:", smart_lightbulb_ips)
 def subscribe_lightbulb(ip):
     REQUEST_BODY = {
         "m2m:sub": {
-            "nu": f"[\"mqtt://{local_ip}:1883\"]",
+            "nu": [
+                f"mqtt://{local_ip}:1883"
+            ],
             "rn": "sub"
         }
     }
@@ -81,7 +81,6 @@ def subscribe_lightbulb(ip):
 
 for smart_lightbulb_ip in smart_lightbulb_ips:
     subscribe_lightbulb(smart_lightbulb_ip)
-
 
 smart_lightbulbs = []
 
@@ -166,30 +165,23 @@ def next():
     created = onem2m.create_resource(SWITCH_CNT, switch_state)
     return jsonify({"state": created["m2m:cin"]["con"]})
 
+
 if __name__ == '__main__':
 
     smart_lightbulb_ips = set(smart_lightbulb_ips)
 
     # MQTT
     client = mqtt.Client()
-    topic = "onem2m/lightbulb/state/sub"
+    topic = "discover"
 
     def on_connect(client, userdata, flags, rc):
         if rc == 0:
             client.subscribe(topic)
             print(f"[MQTT]: Listening for changes...")
 
-    def on_message(client, userdata, message):
-        if topic != message.topic:
-            return
-        
-        cin = message.payload.decode('utf-8')
-        ip = cin["m2m:cin"]["rn"].split('-')[0]
-        state = cin["m2m:cin"]["con"]
-
-        socketio.emit(ip, state)
-
-        print(f"[MQTT]: Lightbulb {ip} changed state")
+    def on_message(client, userdata, msg):
+        print(f"[MQTT]: Discover IP {msg.payload.decode()}")
+        smart_lightbulb_ips.add(msg.payload.decode())
 
     client.on_connect = on_connect
     client.on_message = on_message
@@ -197,7 +189,7 @@ if __name__ == '__main__':
     client.connect(local_ip)
     client.loop_start()
 
-    socketio.run(app, host='0.0.0.0', port=8080)
+    app.run(host='0.0.0.0', port=8080)
 
     client.loop_stop()
 
