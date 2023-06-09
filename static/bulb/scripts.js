@@ -1,5 +1,17 @@
 const API_URL = 'http://localhost:8080'
-const WS_URL = 'ws://localhost:8081'
+const WS_URL = 'ws://localhost:8080'
+
+// Socket IO
+var socket = io(WS_URL);
+socket.on('connect', () => {
+  console.log("Connection established")
+});
+
+socket.on('state', (message) => {
+  isON = message == "on"
+  lightStateElement.textContent = message.toUpperCase()
+  faviconElement.href = isON ? "/static/icons/light-on.png" : "/static/icons/light-off.png"
+})
 
 // H1 Element
 const lightStateElement = document.getElementsByTagName("h1")[0]
@@ -23,24 +35,3 @@ async function getState() {
 		})
 }
 getState()
-
-// Web Sockets
-const socket = new WebSocket(WS_URL);
-
-// Connection established event
-socket.addEventListener('open', () => {
-  console.log('Connected to the WebSocket server');
-});
-
-// Message received event
-socket.addEventListener('message', (event) => {
-  const message = event.data;
-  isON = message == "on"
-  lightStateElement.textContent = message.toUpperCase()
-  faviconElement.href = isON ? "/static/icons/light-on.png" : "/static/icons/light-off.png"
-});
-
-// Connection closed event
-socket.addEventListener('close', () => {
-  console.log('Connection closed');
-});

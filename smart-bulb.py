@@ -4,7 +4,7 @@ from flask import Flask, render_template, jsonify
 from flask_socketio import SocketIO, emit
 from flask_cors import CORS
 import paho.mqtt.client as mqtt
-import websocket
+import uuid
 
 app = Flask(__name__)
 CORS(app, origins='*', methods=['GET', 'POST'], allow_headers='Content-Type')
@@ -62,7 +62,8 @@ onem2m.create_resource(LIGHTBULB_AE, request_body)
 request_body = {
     "m2m:cin": {
         "cnf": "text/plain:0",
-        "con": "{\"state\": \"off\"}"
+        "con": "{\"state\": \"off\"}",
+        "rn": f"{local_ip}_{uuid.uuid4()}"
     }
 }
 onem2m.create_resource(LIGHTBULB_CNT, request_body)
@@ -98,55 +99,41 @@ def home():
 @app.route('/state')
 def state():
     last_bulb_state = onem2m.get_resource(f"{LIGHTBULB_CNT}/la")
-    return jsonify(last_bulb_state)
+    return jsonify({"state": last_bulb_state["m2m:cin"]["con"]["state"]})
 
 @socketio.on('connect')
 def on_connect():
     print(f"[WebSocket]: Connection established")
-    socketio.emit('message', local_ip)
+    socketio.emit('add-lightbulb', local_ip)
     print(f"[WebSocket]: Message sent \"{local_ip}\"")
 
-@socketio.on('message')
-def on_message(data):
-    print('Received message:', data)
 
-def setup_mqtt():
+if __name__ == '__main__':
+
+    # MQTT
     client = mqtt.Client()
-
-    topic = "discovery"
-    smart_lightbulb_ips = set(smart_lightbulb_ips)
 
     def on_connect(client, userdata, flags, rc):
         if rc == 0:
-            client.subscribe(topic)
-            print(f"[MQTT]: Listening for new smart lightbulbs...")
+            client.subscribe("onem2m/lightbulb/state/self-sub")
+            print(f"[MQTT]: Listening for changes...")
 
     def on_message(client, userdata, message):
-        if topic != message.topic:
+        if message.topic != "onem2m/lightbulb/state/self-sub":
             return
         
+        state = message.payload.decode('utf-8')
+        socketio.emit('state', state)
         global smart_lightbulb_ips
-        ip = message.payload.decode('utf-8')
-        smart_lightbulb_ips.add(ip)
 
-        print(f"[MQTT]: {ip} found")
+        print(f"[MQTT]: State {state}")
 
     client.on_connect = on_connect
     client.on_message = on_message
 
     client.connect(local_ip)
-
-def setup_socket(ip):
-    socket = SocketIO(app)
-
-    socket = socket.client(f"ws://{ip}:8080")
-
-    socket.connect()
-
-if __name__ == '__main__':
-    for smart_switch_ip in smart_switch_ips:
-        setup_socket(smart_switch_ip)
-
-    setup_mqtt()
+    client.loop_start()
 
     app.run(host='0.0.0.0', port=8080)
+
+    client.loop_stop()
