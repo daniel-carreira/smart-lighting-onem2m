@@ -5,10 +5,11 @@ from flask_socketio import SocketIO, emit
 from flask_cors import CORS
 import paho.mqtt.client as mqtt
 import uuid
+import json
 
 app = Flask(__name__)
 CORS(app, origins='*', methods=['GET', 'POST'], allow_headers='Content-Type')
-socketio = SocketIO(app)
+socketio = SocketIO(app, cors_allowed_origins='*')
 
 # ------- Procedure List -------
 # 1. Find Local IP
@@ -73,7 +74,7 @@ onem2m.create_resource(LIGHTBULB_CNT, request_body)
 
 request_body = {
     "m2m:sub": {
-        "nu": f"[\"mqtt://{local_ip}:1883\"]",
+        "nu": [f'mqtt://{local_ip}:1883'],
         "rn": "self-sub"
     }
 }
@@ -99,6 +100,7 @@ def home():
 @app.route('/state')
 def state():
     last_bulb_state = onem2m.get_resource(f"{LIGHTBULB_CNT}/la")
+    print(last_bulb_state)
     return jsonify({"state": last_bulb_state["m2m:cin"]["con"]})
 
 @socketio.on('connect')
@@ -112,7 +114,7 @@ if __name__ == '__main__':
 
     # MQTT
     client = mqtt.Client()
-    topic = "onem2m/lightbulb/state/self-sub"
+    topic = "/onem2m/lightbulb/state/self-sub"
 
     def on_connect(client, userdata, flags, rc):
         if rc == 0:
@@ -124,9 +126,11 @@ if __name__ == '__main__':
             return
         
         state = message.payload.decode('utf-8')
+        state_json = json.loads(message.payload)
+        print(state_json)
         socketio.emit('state', state)
 
-        print(f"[MQTT]: State {state}")
+        #print(f"[MQTT]: State {state}")
 
     client.on_connect = on_connect
     client.on_message = on_message
