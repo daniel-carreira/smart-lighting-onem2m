@@ -7,10 +7,25 @@ import paho.mqtt.client as mqtt
 import uuid
 import json
 from threading import Thread
+import signal
 
 app = Flask(__name__)
 CORS(app, origins='*', methods=['GET', 'POST'], allow_headers='Content-Type')
 socketio = SocketIO(app, cors_allowed_origins='*')
+
+# Define Cleanup method
+def cleanup():
+    global local_ip
+    request_body = {
+        "m2m:cin": {
+            "cnf": "text/plain:0",
+            "con": "null",
+            "rn": f"lightbulb_{local_ip}_{uuid.uuid4().hex[:8]}"
+        }
+    }
+    onem2m.create_resource(LIGHTBULB_CNT, request_body)
+
+signal.signal(signal.SIGINT, cleanup)
 
 # ------- Procedure List -------
 # 1. Find Local IP
@@ -24,7 +39,6 @@ socketio = SocketIO(app, cors_allowed_origins='*')
 # ==================== FIND LOCAL IP ====================
 
 local_ip = discovery.get_local_ip()
-print(local_ip)
 
 
 # ==================== CREATE AE ====================
@@ -108,21 +122,19 @@ def state():
 def on_connect():
     print(f"[WebSocket]: Connection established")
 
+# Create CIN to Add Bulb to Every Discovered Switch
+for smart_switch_ip in smart_switch_ips:
+    request_body = {
+        "m2m:cin": {
+            "cnf": "text/plain:0",
+            "con": local_ip,
+            "rn": local_ip
+        }
+    }
+    onem2m.create_resource(f"http://{smart_switch_ip}:8000/onem2m/switch/lightbulbs", request_body)
+    
 
 client = mqtt.Client()
-topic = "discover"
-
-for smart_switch_ip in smart_switch_ips:
-
-    def on_connect_mqtt(client, userdata, flags, rc):
-        if rc == 0:
-            client.publish(topic, local_ip)
-            print(f"[MQTT]: Notified smart switch {smart_switch_ip}...")
-            client.disconnect()
-
-    client.on_connect = on_connect_mqtt
-    client.connect(local_ip)
-
 
 # Function to run MQTT client loop
 def run_mqtt_client():

@@ -18,10 +18,21 @@ socket.on('connect', () => {
 
 socket.on('state', (message) => {
   updateBulb(message.ip, message.state)
+  console.log("Toggle action completed")
 })
 
-socket.on('discover', (message) => {
+socket.on('target', (message) => {
+  targetBulb(message.ip)
+  console.log("Next action completed")
+})
+
+socket.on('add', (message) => {
   createBulb(message)
+  updateUI()
+})
+
+socket.on('remove', (message) => {
+  removeBulb(message.ip)
   updateUI()
 })
 
@@ -30,6 +41,8 @@ let currentIndex = 0;
 let smartBulbs = [];
 
 function createBulb(bulb) {
+  smartBulbs.push(bulb)
+
   isON = bulb.state == "on"
 
   // Create Lightbulb Div
@@ -87,16 +100,12 @@ async function getBulb() {
 	return axios
 		.get("bulbs")
 		.then(function (response) {
-      smartBulbs = response.data
+      let bulbs = response.data
 
       updateUI()
 
-      smartBulbs.forEach((bulb, index) => {
-        socket.on(bulb.ip, (message) => {
-          console.log(`Room "${bulb.ip}": ${message}`)
-          updateBulb(bulb.ip, message)
-        })
-        createBulb(bulb, index)
+      bulbs.forEach((bulb, index) => {
+        createBulb(bulb)
         currentIndex = bulb.current ? index : currentIndex
       })
 		})
@@ -107,39 +116,44 @@ async function getBulb() {
 getBulb()
 
 async function toggle() {
-  ip = smartBulbs[currentIndex].ip
-  console.log(ip)
+  axios
+		.post("toggle")
+		.then(function (response) {
+			console.log("Toggle action requested")
+		})
+		.catch(function (error) {
+			console.log(error)
+		})
+}
 
-  try {
-    const response = await axios.post('/toggle', { state: ip });
-    const isON = response.data.state === 'on';
+function targetBulb(ip) {
+  ip = response.data.ip;
+  const index = smartBulbs.findIndex(item => item.ip === ip);
 
-    const imgs = document.querySelectorAll(".container-lightbulb img");
-    imgs[currentIndex].src = isON ? "/static/icons/light-on.png" : "/static/icons/light-off.png";
-  } catch (error) {
-    console.log(error);
-  }
+  currentIndex = index;
+  const containers = document.querySelectorAll(".container-lightbulb");
+  containers.forEach(container => {
+    container.classList.remove("current");
+  });
+
+  containers[currentIndex].classList.add("current");
 }
 
 async function next() {
-  ip = smartBulbs[currentIndex].ip
-  console.log(ip)
+  axios
+		.post("next")
+		.then(function (response) {
+			console.log("Next action requested")
+		})
+		.catch(function (error) {
+			console.log(error)
+		})
+}
 
-  try {
-    const response = await axios.post("/next", { state: ip });
-    ip = response.data.state;
-    const index = smartBulbs.findIndex(item => item.ip === ip);
-
-    currentIndex = index;
-    const containers = document.querySelectorAll(".container-lightbulb");
-    containers.forEach(container => {
-      container.classList.remove("current");
-    });
-
-    containers[currentIndex].classList.add("current");
-  } catch (error) {
-    console.log(error);
-  }
+function removeBulb(ip) {
+  const index = smartBulbs.findIndex(item => item.ip === ip);
+  const containers = document.querySelectorAll(".container-lightbulb");
+  containers[index].remove()
 }
 
 

@@ -1,6 +1,6 @@
 import utils.discovery as discovery
 import utils.onem2m as onem2m
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, abort
 from flask_socketio import SocketIO, emit
 from flask_cors import CORS
 import paho.mqtt.client as mqtt
@@ -59,6 +59,13 @@ request_body = {
 }
 onem2m.create_resource(SWITCH_AE, request_body)
 
+request_body = {
+     "m2m:cnt": {
+        "rn": "lightbulbs"
+    }
+}
+onem2m.create_resource(SWITCH_AE, request_body)
+
 
 # ==================== 4. DISCOVER SMART LIGHTBULBS ====================
 
@@ -70,17 +77,26 @@ smart_lightbulb_ips = [ smart_device_ip for smart_device_ip in smart_device_ips 
 print("[NMAP]:", smart_lightbulb_ips)
 
 # ==================== 5. CREATE CIN ====================
-request_body = {
-    "m2m:cin": {
-        "cnf": "text/plain:0",
-        "con": "X.X.X.X",
-        "rn": f"switch_{local_ip}_{uuid.uuid4().hex[:8]}"
-    }
-}
 
-if not smart_device_ips:
-    request_body["m2m:cin"]["con"] = smart_lightbulb_ips[0]
-onem2m.create_resource(SWITCH_CNT, request_body)
+if len(smart_lightbulb_ips) > 0:
+    request_body = {
+        "m2m:cin": {
+            "cnf": "text/plain:0",
+            "con": smart_lightbulb_ips[0],
+            "rn": "target-lightbuld"
+        }
+    }
+    onem2m.create_resource(SWITCH_CNT, request_body)
+
+    for smart_lightbulb_ip in smart_lightbulb_ips:
+        request_body = {
+            "m2m:cin": {
+                "cnf": "text/plain:0",
+                "con": smart_lightbulb_ip,
+                "rn": smart_lightbulb_ip
+            }
+        }
+        onem2m.create_resource(f"{SWITCH_AE}/lightbulbs", request_body)
 
 # ==================== 6. SUBSCRIBE TO ALL SMART LIGHTBULBS ====================
 
@@ -98,27 +114,23 @@ for smart_lightbulb_ip in smart_lightbulb_ips:
     subscribe_lightbulb(smart_lightbulb_ip)
 
 
-smart_lightbulbs = []
+# ==================== SELF SUBSCRIBE ====================
 
-def find_bulb(param, value):
-    for index, obj in enumerate(smart_lightbulbs):
-        if obj[param] == value:
-            return index
-    return -1
+REQUEST_BODY = {
+    "m2m:sub": {
+        "nu": f"[\"mqtt://{local_ip}:1883\"]",
+        "rn": "sub"
+    }
+}
+onem2m.create_resource(f"{SWITCH_AE}/lightbulbs", REQUEST_BODY)
 
-def add_bulb(ip, socket):
-    for obj in smart_lightbulbs:
-        if obj["ip"] == ip:
-           return False
-    
-    smart_lightbulbs.append({
-        "ip": ip,
-        "socket": socket
-    })
-    return True
-    
-def remove_bulb(index):
-    del smart_lightbulbs[index]
+REQUEST_BODY = {
+    "m2m:sub": {
+        "nu": f"[\"mqtt://{local_ip}:1883\"]",
+        "rn": "sub"
+    }
+}
+onem2m.create_resource(f"{SWITCH_AE}/state", REQUEST_BODY)
 
 
 # ==================== WEB SMART SWITCH CONTROL ====================
@@ -130,75 +142,105 @@ def home():
 # Discovered bulbs
 @app.route('/bulbs')
 def bulbs():
+    # Get target lightbulb
     switch_state = onem2m.get_resource(f"{SWITCH_CNT}/la")
-    switch_state_ip = switch_state["m2m:cin"]["con"]
+    switch_state_ip = switch_state["m2m:cin"]["con"] if switch_state else None
 
+    # Get all lightbulb IPs
+    switch_lightbulbs_path = onem2m.get_resource(f"{SWITCH_AE}/lightbulbs?fu=1&ty=4")
+    switch_lightbulbs = switch_lightbulbs_path["m2m:uril"]
+    lightbulb_ips = [path.split('/')[-1] for path in switch_lightbulbs]
+
+    # Respond with lightbulb states
     response = []
-    for smart_lightbulb_ip in smart_lightbulb_ips:
-        is_current = switch_state_ip == smart_lightbulb_ip
-        data = onem2m.get_resource(f"http://{smart_lightbulb_ip}:8000/onem2m/lightbulb/state/la")
-        obj = {
-            "ip": smart_lightbulb_ip,
-            "state": data["m2m:cin"]["con"],
+    for lightbulb_ip in lightbulb_ips:
+        lightbulb_state = onem2m.get_resource(f"http://{lightbulb_ip}:8000/onem2m/lightbulb/state/la")
+        is_current = lightbulb_ip == switch_state_ip
+
+        lightbulb = {
+            "ip": lightbulb_ip,
+            "state": lightbulb_state["m2m:cin"]["con"],
             "current": is_current
         }
-        response.append(obj)
-    
+        response.append(lightbulb)
+
     return jsonify(response)
 
 # Toggle route
 @app.route('/toggle', methods=['POST'])
 def toggle():
-    # Get Last State of Lightbulb
+    # Get target lightbulb
+    switch_state = onem2m.get_resource(f"{SWITCH_CNT}/la")
+    switch_state_ip = switch_state["m2m:cin"]["con"] if switch_state else None
+
+    if switch_state_ip is None:
+        abort(400)
+
+    # Get target lightbulb state
+    BULB_CNT = f"http://{switch_state_ip}:8000/onem2m/lightbulb/state"
+    last_bulb_state = onem2m.get_resource(f"{BULB_CNT}/la")
+
+    # Toggle target lightbulb state
     bulb_ip = request.json.get('state')
     BULB_CNT = f"http://{bulb_ip}:8000/onem2m/lightbulb/state"
     last_bulb_state = onem2m.get_resource(f"{BULB_CNT}/la")
 
-    request_body = {
-        "m2m:cin": {
-            "cnf": "text/plain:0",
-            "con": "X.X.X.X",
-            "rn": f"switch_{local_ip}_{uuid.uuid4().hex[:8]}"
-        }
-    }
 
     # Toggle State of Lightbulb
     last_bulb_state["m2m:cin"]["con"] = "on" if last_bulb_state["m2m:cin"]["con"] == "off" else "off"
-    request_body["m2m:cin"]["con"] = last_bulb_state["m2m:cin"]["con"]
-    request_body["m2m:cin"]["rn"] = f"lightbulb_{bulb_ip}_{uuid.uuid4().hex[:8]}"
+    request_body = {
+        "m2m:cin": {
+            "cnf": "text/plain:0",
+            "con": last_bulb_state["m2m:cin"]["con"],
+            "rn": f"lightbulb_{bulb_ip}_{uuid.uuid4().hex[:8]}"
+        }
+    }
     state = onem2m.create_resource(BULB_CNT, request_body)
-    print(state)
-    if (state is None):
-        return ""
-    else:
-        return jsonify({"state": state["m2m:cin"]["con"]})
+    if state is None:
+        abort(400)
+
+    return jsonify({"state": state["m2m:cin"]["con"]})
 
 # Next route
 @app.route('/next', methods=['POST'])
 def next():
-    # Find IP in List
-    bulb_ip = request.json.get('state')
-    print(smart_lightbulb_ips)
-    smart_lightbulb_ips_array = list(smart_lightbulb_ips)
-    index = smart_lightbulb_ips_array.index(bulb_ip)
+    # Get target lightbulb
+    switch_state = onem2m.get_resource(f"{SWITCH_CNT}/la")
+    switch_state_ip = switch_state["m2m:cin"]["con"] if switch_state else None
 
-    # Find next IP
-    next = index + 1
-    next = 0 if next == len(smart_lightbulb_ips) else next
-    next_bulb_ip = smart_lightbulb_ips_array[next]
-    print("-----------------------")
-    print(next_bulb_ip)
+    if switch_state_ip is None:
+        abort(400)
 
+    # Get all lightbulb IPs
+    switch_lightbulbs_path = onem2m.get_resource(f"{SWITCH_AE}/lightbulbs?fu=1&ty=4")
+    switch_lightbulbs = switch_lightbulbs_path["m2m:uril"]
+    lightbulb_ips = [path.split('/')[-1] for path in switch_lightbulbs]
+
+    if len(lightbulb_ips) == 0:
+        abort(400)
+
+    index = -1
+    try:
+        index = lightbulb_ips.index(switch_state_ip)
+    except ValueError:
+        pass
+    finally:
+        index = (index + 1) % len(lightbulb_ips)
+
+    next_bulb_ip = lightbulb_ips[index]
+    
     # Change to the next Lightbulb
-    switch_state = {
+    request_body = {
         "m2m:cin": {
             "cnf": "text/plain:0",
-            "con": next_bulb_ip
+            "con": next_bulb_ip,
+            "rn": f"lightbulb_{local_ip}_{uuid.uuid4().hex[:8]}"
         }
     }
+    created = onem2m.create_resource(SWITCH_CNT, request_body)
+    if created is None:
+        abort(400)
 
-    switch_state["m2m:cin"]["rn"] = f"switch_{local_ip}_{uuid.uuid4().hex[:8]}"
-    created = onem2m.create_resource(SWITCH_CNT, switch_state)
     return jsonify({"state": created["m2m:cin"]["con"]})
 
 # MQTT
@@ -206,35 +248,75 @@ client = mqtt.Client()
 
 def on_connect(client, userdata, flags, rc):
     if rc == 0:
-        client.subscribe("discover")
+        client.subscribe("/onem2m/lightbulb/state/sub")
+        client.subscribe("/onem2m/switch/state/sub")
+        client.subscribe("/onem2m/switch/lightbulbs/sub")
         print(f"[MQTT]: Listening for changes...")
 
 def on_message(client, userdata, message):
-    msg = message.payload.decode('utf-8')
-
-    print("olaaafwefewfewfewf")
-    # Topic: discover
-    if message.topic == "discover":
-        add_bulb(ip, client)
-        socketio.emit("discover", msg)
-        print(f"[MQTT]: Lightbulb discovered")
-        return
+    msg = json.loads(message.payload.decode('utf-8'))
 
     # Topic: /onem2m/lightbulb/state/sub
     if message.topic == "/onem2m/lightbulb/state/sub":
-        cin = json.loads(msg)
-        cin_obj = cin["m2m:sgn"]["nev"]["rep"]["m2m:cin"]
+        # On POST event
+        if msg["m2m:sgn"]["nev"]["net"] != "POST":
+            return
+        
+        bulb_cin = msg["m2m:sgn"]["nev"]["rep"]["m2m:cin"]
 
-        state = cin_obj["con"]
-        ip = cin_obj["rn"].split("_")[0]
+        state = bulb_cin["con"]
+        ip = bulb_cin["rn"].split("_")[1]
+
+        if state == "null":
+            onem2m.delete_resource(f"{SWITCH_AE}/lightbulbs/{ip}")
+
+        else:
+            body = {
+                "ip": ip,
+                "state": state
+            }
+            socketio.emit("state", body)
+
+        print(f"[MQTT]: Lightbulb changed state")
+
+    # Topic: /onem2m/switch/state/sub
+    if message.topic == "/onem2m/switch/state/sub":
+        # On POST event
+        if msg["m2m:sgn"]["nev"]["net"] != "POST":
+            return
+        
+        switch_cin = msg["m2m:sgn"]["nev"]["rep"]["m2m:cin"]
+
+        ip = switch_cin["con"]
+
+        body = {
+            "ip": ip
+        }
+
+        socketio.emit("target", body)
+        print(f"[MQTT]: Switch changed state")
+
+    # Topic: /onem2m/switch/lightbulbs/sub
+    if message.topic == "/onem2m/switch/lightbulbs/sub":
+        switch_cin = msg["m2m:sgn"]["nev"]["rep"]["m2m:cin"]
+        ip = switch_cin["con"]
 
         body = {
             "ip": ip,
-            "state": state
+            "state": ""
         }
 
-        socketio.emit("state", body)
-        print(f"[MQTT]: Lightbulb changed state")
+        # On POST event
+        if msg["m2m:sgn"]["nev"]["net"] == "POST":
+            lightbulb_state = onem2m.get_resource(f"http://{ip}:8000/onem2m/lightbulb/state/la")
+            body["state"] = lightbulb_state["m2m:cin"]["con"]
+            socketio.emit("add", body)
+
+        # On DELETE event
+        if msg["m2m:sgn"]["nev"]["net"] == "DELETE":
+            socketio.emit("remove", body)
+
+        print(f"[MQTT]: Switch changed state")
 
 client.on_connect = on_connect
 client.on_message = on_message
@@ -250,8 +332,6 @@ def run_socketio_server():
 
 if __name__ == '__main__':
 
-    smart_lightbulb_ips = set(smart_lightbulb_ips)
-
     # Create separate threads for MQTT client and SocketIO server
     mqtt_thread = Thread(target=run_mqtt_client)
     socketio_thread = Thread(target=run_socketio_server)
@@ -266,47 +346,3 @@ if __name__ == '__main__':
 
     # Stop MQTT client loop
     client.loop_stop()
-
-
-"""
-# ==================== CLI SMART SWITCH CONTROLS ====================
-try:
-    while True:
-        while len(smart_lightbulb_ips) == 0:
-            pass
-        
-        last_switch_state = onem2m.get_resource(f"{SWITCH_CNT}/la")
-        bulb_ip = last_switch_state["m2m:cin"]["con"]["controlledLight"]
-
-        # Menu
-        print(f"Smart Switch controlling Smart Lightbulb {bulb_ip}:")
-        print("[1] - Toggle State")
-        print("[2] - Next")
-        print("[Ctrl + C] - Quit")
-
-        value = input("Option: ")
-        if value == 1:
-            # Get Last State of Lightbulb
-            BULB_CNT = f"http://{bulb_ip}:8000/onem2m/lightbulb/state"
-            last_bulb_state = onem2m.get_resource(f"{BULB_CNT}/la")
-            
-            # Toggle State of Lightbulb
-            last_bulb_state["m2m:cin"]["con"]["state"] = "on" if last_bulb_state["m2m:cin"]["con"]["state"] == "off" else "off"
-            onem2m.create_resource(BULB_CNT, last_bulb_state)
-
-        if value == 2:
-            # Find IP in List
-            index = smart_lightbulb_ips.find(bulb_ip)
-
-            # Find next IP
-            next = index + 1
-            next = 0 if next == len(smart_lightbulb_ips) else next
-            next_bulb_ip = smart_lightbulb_ips[next]
-
-            # Change to the next Lightbulb
-            last_switch_state["m2m:cin"]["con"]["controlledLight"] = next_bulb_ip
-            onem2m.create_resource(SWITCH_CNT, last_switch_state)
-
-except KeyboardInterrupt:
-    pass
-"""
