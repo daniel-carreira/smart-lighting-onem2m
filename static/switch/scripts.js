@@ -16,10 +16,20 @@ socket.on('connect', () => {
   console.log("Connection established")
 });
 
+socket.on('state', (message) => {
+  updateBulb(message.ip, message.state)
+})
+
+socket.on('discover', (message) => {
+  createBulb(message)
+  updateUI()
+})
+
+
 let currentIndex = 0;
 let smartBulbs = [];
 
-function createBulb(bulb, index) {
+function createBulb(bulb) {
   isON = bulb.state == "on"
 
   // Create Lightbulb Div
@@ -28,7 +38,6 @@ function createBulb(bulb, index) {
 
   // Add the "current" class
   if (bulb.current) {
-    currentIndex = index
     bulbContainer.classList.add("current")
   }
 
@@ -88,6 +97,7 @@ async function getBulb() {
           updateBulb(bulb.ip, message)
         })
         createBulb(bulb, index)
+        currentIndex = bulb.current ? index : currentIndex
       })
 		})
 		.catch(error => {

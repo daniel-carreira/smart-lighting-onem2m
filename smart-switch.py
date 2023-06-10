@@ -4,6 +4,8 @@ from flask import Flask, render_template, request, jsonify
 from flask_socketio import SocketIO, emit
 from flask_cors import CORS
 import paho.mqtt.client as mqtt
+from threading import Thread
+import json
 
 app = Flask(__name__)
 CORS(app, origins='*', methods=['GET', 'POST'], allow_headers='Content-Type')
@@ -166,39 +168,69 @@ def next():
     created = onem2m.create_resource(SWITCH_CNT, switch_state)
     return jsonify({"state": created["m2m:cin"]["con"]})
 
+# MQTT
+client = mqtt.Client()
+
+def on_connect(client, userdata, flags, rc):
+    if rc == 0:
+        client.subscribe('#')
+        print(f"[MQTT]: Listening for changes...")
+
+def on_message(client, userdata, message):
+    msg = message.payload.decode('utf-8')
+
+    # Topic: discover
+    if msg.topic == "discover":
+        add_bulb(ip, client)
+        socketio.emit("discover", msg)
+        print(f"[MQTT]: Lightbulb discovered")
+        return
+
+    # Topic: /onem2m/lightbulb/state/sub
+    if message.topic == "/onem2m/lightbulb/state/sub":
+        cin = json.loads(msg)
+        cin_obj = cin["m2m:sgn"]["nev"]["rep"]["m2m:cin"]
+
+        state = cin_obj["con"]
+        ip = cin_obj["rn"].split("_")[0]
+
+        body = {
+            "ip": ip,
+            "state": state
+        }
+
+        socketio.emit("state", body)
+        print(f"[MQTT]: Lightbulb changed state")
+
+client.on_connect = on_connect
+client.on_message = on_message
+
+# Function to run MQTT client loop
+def run_mqtt_client():
+    client.connect(local_ip)
+    client.loop_start()
+
+# Function to run SocketIO server
+def run_socketio_server():
+    socketio.run(app, host='0.0.0.0', port=8080)
+
 if __name__ == '__main__':
 
     smart_lightbulb_ips = set(smart_lightbulb_ips)
 
-    # MQTT
-    client = mqtt.Client()
-    topic = "onem2m/lightbulb/state/sub"
+    # Create separate threads for MQTT client and SocketIO server
+    mqtt_thread = Thread(target=run_mqtt_client)
+    socketio_thread = Thread(target=run_socketio_server)
 
-    def on_connect(client, userdata, flags, rc):
-        if rc == 0:
-            client.subscribe(topic)
-            print(f"[MQTT]: Listening for changes...")
+    # Start the threads
+    mqtt_thread.start()
+    socketio_thread.start()
 
-    def on_message(client, userdata, message):
-        if topic != message.topic:
-            return
-        
-        cin = message.payload.decode('utf-8')
-        ip = cin["m2m:cin"]["rn"].split('-')[0]
-        state = cin["m2m:cin"]["con"]
+    # Wait for both threads to complete
+    mqtt_thread.join()
+    socketio_thread.join()
 
-        socketio.emit(ip, state)
-
-        print(f"[MQTT]: Lightbulb {ip} changed state")
-
-    client.on_connect = on_connect
-    client.on_message = on_message
-
-    client.connect(local_ip)
-    client.loop_start()
-
-    socketio.run(app, host='0.0.0.0', port=8080)
-
+    # Stop MQTT client loop
     client.loop_stop()
 
 

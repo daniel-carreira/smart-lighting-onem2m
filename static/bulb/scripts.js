@@ -4,10 +4,11 @@ const WS_URL = 'ws://localhost:8080'
 // Socket IO
 var socket = io(WS_URL);
 socket.on('connect', () => {
-  console.log("Connection established")
+  console.log("[WS]: Connection established")
 });
 
 socket.on('state', (message) => {
+  console.log(`[WS]: "state" -> ${message}`)
   isON = message == "on"
   lightStateElement.textContent = message.toUpperCase()
   faviconElement.href = isON ? "/static/icons/light-on.png" : "/static/icons/light-off.png"

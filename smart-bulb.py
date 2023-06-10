@@ -6,6 +6,7 @@ from flask_cors import CORS
 import paho.mqtt.client as mqtt
 import uuid
 import json
+from threading import Thread
 
 app = Flask(__name__)
 CORS(app, origins='*', methods=['GET', 'POST'], allow_headers='Content-Type')
@@ -74,7 +75,7 @@ onem2m.create_resource(LIGHTBULB_CNT, request_body)
 
 request_body = {
     "m2m:sub": {
-        "nu": [f'mqtt://{local_ip}:1883'],
+        "nu": ["mqtt://" + local_ip + ":1883"],
         "rn": "self-sub"
     }
 }
@@ -100,20 +101,30 @@ def home():
 @app.route('/state')
 def state():
     last_bulb_state = onem2m.get_resource(f"{LIGHTBULB_CNT}/la")
-    print(last_bulb_state)
     return jsonify({"state": last_bulb_state["m2m:cin"]["con"]})
 
 @socketio.on('connect')
 def on_connect():
     print(f"[WebSocket]: Connection established")
-    socketio.emit('add-lightbulb', local_ip)
-    print(f"[WebSocket]: Message sent \"{local_ip}\"")
 
 
-if __name__ == '__main__':
+client = mqtt.Client()
+topic = "discover"
 
-    # MQTT
-    client = mqtt.Client()
+for smart_switch_ip in smart_switch_ips:
+
+    def on_connect_mqtt(client, userdata, flags, rc):
+        if rc == 0:
+            client.publish(topic, local_ip)
+            print(f"[MQTT]: Notified smart switch {smart_switch_ip}...")
+            client.disconnect()
+
+    client.on_connect = on_connect_mqtt
+    client.connect(local_ip)
+
+
+# Function to run MQTT client loop
+def run_mqtt_client():
     topic = "/onem2m/lightbulb/state/self-sub"
 
     def on_connect(client, userdata, flags, rc):
@@ -125,12 +136,9 @@ if __name__ == '__main__':
         if message.topic != topic:
             return
         
-        state = message.payload.decode('utf-8')
-        state_json = json.loads(message.payload)
-        print(state_json)
-        socketio.emit('state', state)
-
-        #print(f"[MQTT]: State {state}")
+        state = json.loads(message.payload.decode('utf-8'))
+        socketio.emit('state', state["m2m:sgn"]["nev"]["rep"]["m2m:cin"]["con"])
+        print(f"[MQTT]: State {state}")
 
     client.on_connect = on_connect
     client.on_message = on_message
@@ -138,6 +146,23 @@ if __name__ == '__main__':
     client.connect(local_ip)
     client.loop_start()
 
+# Function to run SocketIO server
+def run_socketio_server():
     socketio.run(app, host='0.0.0.0', port=8080)
 
+if __name__ == '__main__':
+
+    # Create separate threads for MQTT client and SocketIO server
+    mqtt_thread = Thread(target=run_mqtt_client)
+    socketio_thread = Thread(target=run_socketio_server)
+
+    # Start the threads
+    mqtt_thread.start()
+    socketio_thread.start()
+
+    # Wait for both threads to complete
+    mqtt_thread.join()
+    socketio_thread.join()
+
+    # Stop MQTT client loop
     client.loop_stop()
