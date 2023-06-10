@@ -53,7 +53,7 @@ onem2m.create_resource(CSE_BASE, request_body)
 
 request_body = {
      "m2m:cnt": {
-        "mni": 1,
+        "mni": 50,
         "rn": "state"
     }
 }
@@ -61,12 +61,11 @@ onem2m.create_resource(SWITCH_AE, request_body)
 
 request_body = {
      "m2m:cnt": {
-        "mni": 1,
+        "mni": 50,
         "rn": "lightbulbs"
     }
 }
 onem2m.create_resource(SWITCH_AE, request_body)
-
 
 # ==================== 4. DISCOVER SMART LIGHTBULBS ====================
 
@@ -286,14 +285,13 @@ def run_mqtt_client():
             # On POST event
             if msg["m2m:sgn"]["nev"]["net"] != "POST" or "m2m:cin" not in msg["m2m:sgn"]["nev"]["rep"]:
                 return
-            
-            print("------------------")
-            print(msg["m2m:sgn"]["nev"]["rep"])
-            
+
             switch_cin = msg["m2m:sgn"]["nev"]["rep"]["m2m:cin"]
 
-            ip = switch_cin["con"]
+            print('------------------------')
+            print(switch_cin)
 
+            ip = switch_cin["con"]
             body = {
                 "ip": ip
             }
@@ -311,12 +309,7 @@ def run_mqtt_client():
                 "state": ""
             }
 
-            print("-----------")
-            print(ip)
-
-            print( msg["m2m:sgn"]["nev"]["net"])
             mqtt_url = "mqtt://" + local_ip + ":1883"
-            print(mqtt_url)
             # On POST event
             if msg["m2m:sgn"]["nev"]["net"] == "POST":
                 REQUEST_BODY = {
@@ -327,10 +320,25 @@ def run_mqtt_client():
                 }
                 onem2m.create_resource(f"http://{ip}:8000/onem2m/lightbulb/state", REQUEST_BODY)
 
+                switch_state = onem2m.get_resource(f"{SWITCH_CNT}/la")
+                print('----------------------------')
+                print(switch_state)
+                print('----------------------------')
+                if "no instance" in str(switch_state):
+                    request_body = {
+                        "m2m:cin": {
+                            "cnf": "text/plain:0",
+                            "con": ip,
+                            "rn": f"lightbulb_{ip}_{uuid.uuid4().hex[:8]}"
+                        }
+                    }
+                    onem2m.create_resource(SWITCH_CNT, request_body)
+                    print("doneeeeeee")
+
                 lightbulb_state = onem2m.get_resource(f"http://{ip}:8000/onem2m/lightbulb/state/la")
                 body["state"] = lightbulb_state["m2m:cin"]["con"]
-                print(body["state"])
-                socketio.emit("add", "ola")
+                print(body)
+                socketio.emit("add", body)
 
             # On DELETE event
             if msg["m2m:sgn"]["nev"]["net"] == "DELETE":

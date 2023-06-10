@@ -8,25 +8,22 @@ socket.on('connect', () => {
 });
 
 socket.on('state', (message) => {
-  console.log("olaaaaaaa")
   updateBulb(message.ip, message.state)
   console.log("Toggle action completed")
 })
 
 socket.on('target', (message) => {
-  console.log("olaaaaaaa")
+  console.log(message)
   targetBulb(message.ip)
   console.log("Next action completed")
 })
 
 socket.on('add', (message) => {
-  console.log("olaaaaaaaa")
   createBulb(message)
   updateUI()
 })
 
 socket.on('remove', (message) => {
-  console.log("olaaaaaaa")
   removeBulb(message.ip)
   updateUI()
 })
@@ -121,6 +118,7 @@ async function getBulb() {
 getBulb()
 
 async function toggle() {
+  console.log("toggleeeeeee")
   axios
 		.post("toggle")
 		.then(function (response) {
