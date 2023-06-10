@@ -118,7 +118,6 @@ async function getBulb() {
 getBulb()
 
 async function toggle() {
-  console.log("toggleeeeeee")
   axios
 		.post("toggle")
 		.then(function (response) {
@@ -134,7 +133,7 @@ async function toggle() {
 }
 
 function targetBulb(ip) {
-  ip = response.data.ip;
+  //ip = response.data.ip;
   const index = smartBulbs.findIndex(item => item.ip === ip);
 
   currentIndex = index;
