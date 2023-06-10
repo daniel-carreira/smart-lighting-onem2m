@@ -6,6 +6,7 @@ from flask_cors import CORS
 import paho.mqtt.client as mqtt
 from threading import Thread
 import json
+import uuid
 
 app = Flask(__name__)
 CORS(app, origins='*', methods=['GET', 'POST'], allow_headers='Content-Type')
@@ -73,9 +74,12 @@ request_body = {
     "m2m:cin": {
         "cnf": "text/plain:0",
         "con": "X.X.X.X",
-        "rn": f"switch_{local_ip}"
+        "rn": f"switch_{local_ip}_{uuid.uuid4().hex[:8]}"
     }
 }
+
+if smart_lightbulb_ips is not []:
+    request_body["m2m:cin"]["con"] = smart_lightbulb_ips[0]
 onem2m.create_resource(SWITCH_CNT, request_body)
 
 # ==================== 6. SUBSCRIBE TO ALL SMART LIGHTBULBS ====================
@@ -126,9 +130,7 @@ def home():
 # Discovered bulbs
 @app.route('/bulbs')
 def bulbs():
-    print(f"{SWITCH_CNT}/la")
     switch_state = onem2m.get_resource(f"{SWITCH_CNT}/la")
-    print(switch_state)
     switch_state_ip = switch_state["m2m:cin"]["con"]
 
     response = []
@@ -148,12 +150,14 @@ def bulbs():
 @app.route('/toggle', methods=['POST'])
 def toggle():
     # Get Last State of Lightbulb
-    bulb_ip = request.form.get('ip')
+    bulb_ip = request.json.get('state')
     BULB_CNT = f"http://{bulb_ip}:8000/onem2m/lightbulb/state"
     last_bulb_state = onem2m.get_resource(f"{BULB_CNT}/la")
-    
+
     # Toggle State of Lightbulb
     last_bulb_state["m2m:cin"]["con"] = "on" if last_bulb_state["m2m:cin"]["con"] == "off" else "off"
+    last_bulb_state["m2m:cin"]["rn"] = f"switch_{local_ip}_{uuid.uuid4().hex[:8]}"
+    print(last_bulb_state)
     created = onem2m.create_resource(BULB_CNT, last_bulb_state)
     return jsonify({"state": created["m2m:cin"]["con"]})
 

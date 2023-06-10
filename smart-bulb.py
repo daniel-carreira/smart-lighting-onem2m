@@ -66,7 +66,7 @@ request_body = {
     "m2m:cin": {
         "cnf": "text/plain:0",
         "con": "off",
-        "rn": f"lightbulb_{local_ip}"
+        "rn": f"lightbulb_{local_ip}_{uuid.uuid4().hex[:8]}"
     }
 }
 onem2m.create_resource(LIGHTBULB_CNT, request_body)

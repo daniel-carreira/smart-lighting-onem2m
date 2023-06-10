@@ -108,17 +108,17 @@ getBulb()
 
 async function toggle() {
   ip = smartBulbs[currentIndex].ip
+  console.log(ip)
 
-  return axios.post("toggle", {"state": ip})
-    .then(response => {
-      isON = response.data.state == "on"
+  try {
+    const response = await axios.post('/toggle', { state: ip });
+    const isON = response.data.state === 'on';
 
-      imgs = document.querySelectorAll(".container-lightbulb img");
-      imgs[currentIndex].src = isON ? "/static/icons/light-on.png" : "/static/icons/light-off.png"
-    })
-    .catch(error => {
-			console.log(error)
-		})
+    const imgs = document.querySelectorAll(".container-lightbulb img");
+    imgs[currentIndex].src = isON ? "/static/icons/light-on.png" : "/static/icons/light-off.png";
+  } catch (error) {
+    console.log(error);
+  }
 }
 
 function next() {
