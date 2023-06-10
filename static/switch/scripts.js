@@ -1,15 +1,6 @@
 const API_URL = 'http://localhost:8080'
 const WS_URL = 'ws://localhost:8080'
 
-const lookingElement = document.getElementsByTagName("h1")[0]
-const containerElement = document.getElementsByClassName("container-switch")[0]
-const actionButtonsElement = document.getElementsByClassName("fixed-buttons")[0]
-
-// Axios config
-axios.defaults.baseURL = API_URL
-//axios.defaults.headers.post['Content-Type'] = 'application/json';
-axios.defaults.headers.post['Accept'] = 'application/json'
-
 // Socket IO
 var socket = io(WS_URL);
 socket.on('connect', () => {
@@ -17,24 +8,37 @@ socket.on('connect', () => {
 });
 
 socket.on('state', (message) => {
+  console.log("olaaaaaaa")
   updateBulb(message.ip, message.state)
   console.log("Toggle action completed")
 })
 
 socket.on('target', (message) => {
+  console.log("olaaaaaaa")
   targetBulb(message.ip)
   console.log("Next action completed")
 })
 
 socket.on('add', (message) => {
+  console.log("olaaaaaaaa")
   createBulb(message)
   updateUI()
 })
 
 socket.on('remove', (message) => {
+  console.log("olaaaaaaa")
   removeBulb(message.ip)
   updateUI()
 })
+
+// Axios config
+axios.defaults.baseURL = API_URL
+axios.defaults.headers.post['Accept'] = 'application/json'
+
+
+const lookingElement = document.getElementsByTagName("h1")[0]
+const containerElement = document.getElementsByClassName("container-switch")[0]
+const actionButtonsElement = document.getElementsByClassName("fixed-buttons")[0]
 
 
 let currentIndex = 0;
@@ -102,12 +106,13 @@ async function getBulb() {
 		.then(function (response) {
       let bulbs = response.data
 
+      if (bulbs.length > 0){
+        bulbs.forEach((bulb, index) => {
+          createBulb(bulb)
+          currentIndex = bulb.current ? index : currentIndex
+        })
+      }
       updateUI()
-
-      bulbs.forEach((bulb, index) => {
-        createBulb(bulb)
-        currentIndex = bulb.current ? index : currentIndex
-      })
 		})
 		.catch(error => {
 			console.log(error)
@@ -120,6 +125,10 @@ async function toggle() {
 		.post("toggle")
 		.then(function (response) {
 			console.log("Toggle action requested")
+      console.log(response.data)
+      const isON = response.data.state === 'on';
+      const imgs = document.querySelectorAll(".container-lightbulb img");
+      imgs[currentIndex].src = isON ? "/static/icons/light-on.png" : "/static/icons/light-off.png";
 		})
 		.catch(function (error) {
 			console.log(error)
