@@ -167,7 +167,11 @@ def toggle():
     request_body["m2m:cin"]["con"] = last_bulb_state["m2m:cin"]["con"]
     request_body["m2m:cin"]["rn"] = f"lightbulb_{bulb_ip}_{uuid.uuid4().hex[:8]}"
     state = onem2m.create_resource(BULB_CNT, request_body)
-    return jsonify({"state": state["m2m:cin"]["con"]})
+    print(state)
+    if (state is None):
+        return ""
+    else:
+        return jsonify({"state": state["m2m:cin"]["con"]})
 
 # Next route
 @app.route('/next', methods=['POST'])
@@ -202,12 +206,13 @@ client = mqtt.Client()
 
 def on_connect(client, userdata, flags, rc):
     if rc == 0:
-        client.subscribe('#')
+        client.subscribe("discover")
         print(f"[MQTT]: Listening for changes...")
 
 def on_message(client, userdata, message):
     msg = message.payload.decode('utf-8')
 
+    print("olaaafwefewfewfewf")
     # Topic: discover
     if message.topic == "discover":
         add_bulb(ip, client)
