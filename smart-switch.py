@@ -144,7 +144,6 @@ def home():
 def bulbs():
     # Get target lightbulb
     switch_state = onem2m.get_resource(f"{SWITCH_CNT}/la")
-    print(switch_state)
     if (switch_state != {'m2m:dbg': 'no instance for <latest> or <oldest>'}):
         switch_state_ip = switch_state["m2m:cin"]["con"] if switch_state else None
 
@@ -262,7 +261,6 @@ def run_mqtt_client():
             if msg["m2m:sgn"]["nev"]["net"] != "POST" or "m2m:cin" not in msg["m2m:sgn"]["nev"]["rep"]:
                 return
             
-            print(msg["m2m:sgn"]["nev"]["rep"])
             bulb_cin = msg["m2m:sgn"]["nev"]["rep"]["m2m:cin"]
 
             state = bulb_cin["con"]
@@ -287,9 +285,6 @@ def run_mqtt_client():
                 return
 
             switch_cin = msg["m2m:sgn"]["nev"]["rep"]["m2m:cin"]
-
-            print('------------------------')
-            print(switch_cin)
 
             ip = switch_cin["con"]
             body = {
@@ -321,9 +316,6 @@ def run_mqtt_client():
                 onem2m.create_resource(f"http://{ip}:8000/onem2m/lightbulb/state", REQUEST_BODY)
 
                 switch_state = onem2m.get_resource(f"{SWITCH_CNT}/la")
-                print('----------------------------')
-                print(switch_state)
-                print('----------------------------')
                 if "no instance" in str(switch_state):
                     request_body = {
                         "m2m:cin": {
@@ -333,11 +325,9 @@ def run_mqtt_client():
                         }
                     }
                     onem2m.create_resource(SWITCH_CNT, request_body)
-                    print("doneeeeeee")
 
                 lightbulb_state = onem2m.get_resource(f"http://{ip}:8000/onem2m/lightbulb/state/la")
                 body["state"] = lightbulb_state["m2m:cin"]["con"]
-                print(body)
                 socketio.emit("add", body)
 
             # On DELETE event

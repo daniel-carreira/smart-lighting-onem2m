@@ -150,12 +150,9 @@ def run_mqtt_client():
             return
 
         state = json.loads(message.payload.decode('utf-8'))
-        print(state)
         if ("m2m:cin" in str(state["m2m:sgn"]["nev"]["rep"])):
             socketio.emit('state', state["m2m:sgn"]["nev"]["rep"]["m2m:cin"]["con"])
-            print(f"[MQTT]: State {state}")
-        else:
-            print(f"SUBBBBB")        
+            print(f"[MQTT]: State {state}")   
 
     client.on_connect = on_connect
     client.on_message = on_message

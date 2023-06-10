@@ -13,7 +13,6 @@ socket.on('state', (message) => {
 })
 
 socket.on('target', (message) => {
-  console.log(message)
   targetBulb(message.ip)
   console.log("Next action completed")
 })
