@@ -121,24 +121,27 @@ async function toggle() {
   }
 }
 
-function next() {
-  return axios.post("next")
-    .then(response => {
-      ip = response.data.state
-      index = smartBulbs.find( item => item.ip == ip)
+async function next() {
+  ip = smartBulbs[currentIndex].ip
+  console.log(ip)
 
-      currentIndex = index
-      let containers = document.querySelectorAll(".container-lightbulb");
-      containers.forEach( container => {
-        container.classList.remove("current");
-      })
+  try {
+    const response = await axios.post("/next", { state: ip });
+    ip = response.data.state;
+    const index = smartBulbs.findIndex(item => item.ip === ip);
 
-      containers[currentIndex].classList.add("current");
-    })
-    .catch(error => {
-      console.log(error)
-    })
+    currentIndex = index;
+    const containers = document.querySelectorAll(".container-lightbulb");
+    containers.forEach(container => {
+      container.classList.remove("current");
+    });
+
+    containers[currentIndex].classList.add("current");
+  } catch (error) {
+    console.log(error);
+  }
 }
+
 
 document.getElementById("toggle").addEventListener('click', toggle);
 document.getElementById("next").addEventListener('click', next);

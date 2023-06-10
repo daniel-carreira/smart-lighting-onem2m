@@ -154,24 +154,36 @@ def toggle():
     BULB_CNT = f"http://{bulb_ip}:8000/onem2m/lightbulb/state"
     last_bulb_state = onem2m.get_resource(f"{BULB_CNT}/la")
 
+    request_body = {
+        "m2m:cin": {
+            "cnf": "text/plain:0",
+            "con": "X.X.X.X",
+            "rn": f"switch_{local_ip}_{uuid.uuid4().hex[:8]}"
+        }
+    }
+
     # Toggle State of Lightbulb
     last_bulb_state["m2m:cin"]["con"] = "on" if last_bulb_state["m2m:cin"]["con"] == "off" else "off"
-    last_bulb_state["m2m:cin"]["rn"] = f"switch_{local_ip}_{uuid.uuid4().hex[:8]}"
-    print(last_bulb_state)
-    created = onem2m.create_resource(BULB_CNT, last_bulb_state)
-    return jsonify({"state": created["m2m:cin"]["con"]})
+    request_body["m2m:cin"]["con"] = last_bulb_state["m2m:cin"]["con"]
+    request_body["m2m:cin"]["rn"] = f"lightbulb_{bulb_ip}_{uuid.uuid4().hex[:8]}"
+    state = onem2m.create_resource(BULB_CNT, request_body)
+    return jsonify({"state": state["m2m:cin"]["con"]})
 
 # Next route
 @app.route('/next', methods=['POST'])
 def next():
     # Find IP in List
-    bulb_ip = request.form.get('ip')
-    index = smart_lightbulb_ips.find(bulb_ip)
+    bulb_ip = request.json.get('state')
+    print(smart_lightbulb_ips)
+    smart_lightbulb_ips_array = list(smart_lightbulb_ips)
+    index = smart_lightbulb_ips_array.index(bulb_ip)
 
     # Find next IP
     next = index + 1
     next = 0 if next == len(smart_lightbulb_ips) else next
-    next_bulb_ip = smart_lightbulb_ips[next]
+    next_bulb_ip = smart_lightbulb_ips_array[next]
+    print("-----------------------")
+    print(next_bulb_ip)
 
     # Change to the next Lightbulb
     switch_state = {
@@ -180,6 +192,8 @@ def next():
             "con": next_bulb_ip
         }
     }
+
+    switch_state["m2m:cin"]["rn"] = f"switch_{local_ip}_{uuid.uuid4().hex[:8]}"
     created = onem2m.create_resource(SWITCH_CNT, switch_state)
     return jsonify({"state": created["m2m:cin"]["con"]})
 

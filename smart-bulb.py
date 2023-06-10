@@ -137,6 +137,7 @@ def run_mqtt_client():
         if message.topic != topic:
             return
 
+        state = json.loads(message.payload.decode('utf-8'))
         print(state)
         if ("m2m:cin" in str(state["m2m:sgn"]["nev"]["rep"])):
             socketio.emit('state', state["m2m:sgn"]["nev"]["rep"]["m2m:cin"]["con"])
