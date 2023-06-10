@@ -78,7 +78,7 @@ request_body = {
     }
 }
 
-if smart_lightbulb_ips is not []:
+if not smart_device_ips:
     request_body["m2m:cin"]["con"] = smart_lightbulb_ips[0]
 onem2m.create_resource(SWITCH_CNT, request_body)
 
