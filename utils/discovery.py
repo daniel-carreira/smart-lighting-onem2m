@@ -11,6 +11,6 @@ def discover_ips_on_port(local_ip, port):
     target_ip = f"{network_prefix}.0/24"
     nm = nmap.PortScanner()
     nm.scan(hosts=target_ip, arguments=f'-p {port}')
-    ips = [host for host in nm.all_hosts() if nm[host].has_tcp(port) and nm[host]['tcp'][port]['state'] == 'open' and host != local_ip]
+    ips = [host for host in nm.all_hosts() if nm[host].has_tcp(port) and nm[host]['tcp'][port]['state'] == 'open']
     
     return ips
