@@ -7,13 +7,13 @@ const actionButtonsElement = document.getElementsByClassName("fixed-buttons")[0]
 
 // Axios config
 axios.defaults.baseURL = API_URL
-axios.defaults.headers.post['Content-Type'] = 'application/json';
+//axios.defaults.headers.post['Content-Type'] = 'application/json';
 axios.defaults.headers.post['Accept'] = 'application/json'
 
 // Socket IO
 var socket = io(WS_URL);
 socket.on('connect', () => {
-  console.log("Connection established")
+  console.log("[WS]: Connection established")
 });
 
 socket.on('state', (message) => {

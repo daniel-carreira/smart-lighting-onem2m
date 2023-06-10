@@ -9,7 +9,7 @@ import json
 
 app = Flask(__name__)
 CORS(app, origins='*', methods=['GET', 'POST'], allow_headers='Content-Type')
-socketio = SocketIO(app)
+socketio = SocketIO(app, cors_allowed_origins='*')
 
 # ------- Procedure List -------
 # 1. Find Local IP
@@ -22,12 +22,12 @@ socketio = SocketIO(app)
 # 8. Smart Switch controls
 
 
-# ==================== FIND LOCAL IP ====================
+# ==================== 1. FIND LOCAL IP ====================
 
 local_ip = discovery.get_local_ip()
 
 
-# ==================== CREATE AE ====================
+# ==================== 2. CREATE AE ====================
 
 # Constants
 CSE_BASE = f"http://{local_ip}:8000/onem2m"
@@ -48,7 +48,7 @@ request_body = {
 onem2m.create_resource(CSE_BASE, request_body)
 
 
-# ==================== CREATE CNT ====================
+# ==================== 3. CREATE CNT ====================
 
 request_body = {
      "m2m:cnt": {
@@ -59,7 +59,7 @@ request_body = {
 onem2m.create_resource(SWITCH_AE, request_body)
 
 
-# ==================== DISCOVER SMART LIGHTBULBS ====================
+# ==================== 4. DISCOVER SMART LIGHTBULBS ====================
 
 print("[NMAP]: Searching for smart lightbulbs...")
 
@@ -68,8 +68,17 @@ smart_lightbulb_ips = [ smart_device_ip for smart_device_ip in smart_device_ips 
 
 print("[NMAP]:", smart_lightbulb_ips)
 
+# ==================== 5. CREATE CIN ====================
+request_body = {
+    "m2m:cin": {
+        "cnf": "text/plain:0",
+        "con": "X.X.X.X",
+        "rn": f"switch_{local_ip}"
+    }
+}
+onem2m.create_resource(SWITCH_CNT, request_body)
 
-# ==================== SUBSCRIBE TO ALL SMART LIGHTBULBS ====================
+# ==================== 6. SUBSCRIBE TO ALL SMART LIGHTBULBS ====================
 
 def subscribe_lightbulb(ip):
     REQUEST_BODY = {
@@ -112,12 +121,14 @@ def remove_bulb(index):
 
 @app.route('/')
 def home():
-    return render_template('index.html')
+    return render_template('switch/index.html')
 
 # Discovered bulbs
 @app.route('/bulbs')
 def bulbs():
+    print(f"{SWITCH_CNT}/la")
     switch_state = onem2m.get_resource(f"{SWITCH_CNT}/la")
+    print(switch_state)
     switch_state_ip = switch_state["m2m:cin"]["con"]
 
     response = []
@@ -180,7 +191,7 @@ def on_message(client, userdata, message):
     msg = message.payload.decode('utf-8')
 
     # Topic: discover
-    if msg.topic == "discover":
+    if message.topic == "discover":
         add_bulb(ip, client)
         socketio.emit("discover", msg)
         print(f"[MQTT]: Lightbulb discovered")

@@ -24,6 +24,7 @@ socketio = SocketIO(app, cors_allowed_origins='*')
 # ==================== FIND LOCAL IP ====================
 
 local_ip = discovery.get_local_ip()
+print(local_ip)
 
 
 # ==================== CREATE AE ====================
@@ -65,7 +66,7 @@ request_body = {
     "m2m:cin": {
         "cnf": "text/plain:0",
         "con": "off",
-        "rn": f"{local_ip}_{uuid.uuid4()}"
+        "rn": f"lightbulb_{local_ip}"
     }
 }
 onem2m.create_resource(LIGHTBULB_CNT, request_body)
