@@ -3,7 +3,9 @@
 # Check if port 1883 is open and not occupied
 if ! lsof -i :1883 > /dev/null; then
   echo "[1883] - Running MQTT server"
-  ./mqtt-server &
+  cd mongoose-master/examples/mqtt-server
+  make &
+  cd ../../..
 else
   echo "[1883] - occupied. Cannot start MQTT server"
 fi
