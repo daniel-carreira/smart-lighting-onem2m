@@ -136,10 +136,13 @@ def run_mqtt_client():
     def on_message(client, userdata, message):
         if message.topic != topic:
             return
-        
-        state = json.loads(message.payload.decode('utf-8'))
-        socketio.emit('state', state["m2m:sgn"]["nev"]["rep"]["m2m:cin"]["con"])
-        print(f"[MQTT]: State {state}")
+
+        print(state)
+        if ("m2m:cin" in str(state["m2m:sgn"]["nev"]["rep"])):
+            socketio.emit('state', state["m2m:sgn"]["nev"]["rep"]["m2m:cin"]["con"])
+            print(f"[MQTT]: State {state}")
+        else:
+            print(f"SUBBBBB")        
 
     client.on_connect = on_connect
     client.on_message = on_message
