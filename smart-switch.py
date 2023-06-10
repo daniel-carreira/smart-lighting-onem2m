@@ -308,6 +308,14 @@ def on_message(client, userdata, message):
 
         # On POST event
         if msg["m2m:sgn"]["nev"]["net"] == "POST":
+            REQUEST_BODY = {
+                "m2m:sub": {
+                    "nu": f"[\"mqtt://{local_ip}:1883\"]",
+                    "rn": "sub"
+                }
+            }
+            onem2m.create_resource(f"http://{ip}:8000/onem2m/lightbulb/state", REQUEST_BODY)
+
             lightbulb_state = onem2m.get_resource(f"http://{ip}:8000/onem2m/lightbulb/state/la")
             body["state"] = lightbulb_state["m2m:cin"]["con"]
             socketio.emit("add", body)
