@@ -1,5 +1,7 @@
-const API_URL = 'http://localhost:8080'
-const WS_URL = 'ws://localhost:8080'
+const HOST = window.location.host
+
+const API_URL = `http://${HOST}:8080`
+const WS_URL = `ws://${HOST}:8080`
 
 // Socket IO
 var socket = io(WS_URL);
