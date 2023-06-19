@@ -6,7 +6,7 @@ from flask_cors import CORS
 import paho.mqtt.client as mqtt
 from threading import Thread
 import json
-import uuid
+import time
 
 app = Flask(__name__)
 CORS(app, origins='*', methods=['GET', 'POST'], allow_headers='Content-Type')
@@ -83,7 +83,7 @@ if len(smart_lightbulb_ips) > 0:
         "m2m:cin": {
             "cnf": "text/plain:0",
             "con": smart_lightbulb_ips[0],
-            "rn": f"target-lightbulb_{uuid.uuid4().hex[:8]}"
+            "rn": f"target-lightbulb_{int(time.time()*1000)}"
         }
     }
     onem2m.create_resource(SWITCH_CNT, request_body)
@@ -100,11 +100,13 @@ if len(smart_lightbulb_ips) > 0:
 
 # ==================== 6. SUBSCRIBE TO ALL SMART LIGHTBULBS ====================
 
+local_ip_no_points = local_ip.replace('.', '')
+
 def subscribe_lightbulb(ip):
     REQUEST_BODY = {
         "m2m:sub": {
             "nu": ["mqtt://" + local_ip + ":1883"],
-            "rn": "sub"
+            "rn": "sub-" + local_ip_no_points
         }
     }
     LIGHTBULB_CNT = f"http://{ip}:8000/onem2m/lightbulb/state"
@@ -189,13 +191,14 @@ def toggle():
         "m2m:cin": {
             "cnf": "text/plain:0",
             "con": last_bulb_state["m2m:cin"]["con"],
-            "rn": f"lightbulb_{switch_state_ip}_{uuid.uuid4().hex[:8]}"
+            "rn": f"lightbulb_{switch_state_ip}_{int(time.time()*1000)}"
         }
     }
     state = onem2m.create_resource(BULB_CNT, request_body)
     if state is None:
         abort(400)
 
+    socketio.emit("state", {"ip": switch_state_ip, "state": state["m2m:cin"]["con"]})
     return jsonify({"state": state["m2m:cin"]["con"]})
 
 # Next route
@@ -231,7 +234,7 @@ def next():
         "m2m:cin": {
             "cnf": "text/plain:0",
             "con": next_bulb_ip,
-            "rn": f"lightbulb_{next_bulb_ip}_{uuid.uuid4().hex[:8]}"
+            "rn": f"lightbulb_{next_bulb_ip}_{int(time.time()*1000)}"
         }
     }
     created = onem2m.create_resource(SWITCH_CNT, request_body)
@@ -247,7 +250,7 @@ client = mqtt.Client()
 def run_mqtt_client():
     def on_connect(client, userdata, flags, rc):
         if rc == 0:
-            sub_topic = "/onem2m/lightbulb/state/sub"
+            sub_topic = f"/onem2m/lightbulb/state/sub-{local_ip_no_points}"
             client.subscribe(sub_topic)
             client.subscribe("/onem2m/switch/state/sub")
             client.subscribe("/onem2m/switch/lightbulbs/sub")
@@ -311,7 +314,7 @@ def run_mqtt_client():
                 REQUEST_BODY = {
                     "m2m:sub": {
                         "nu": [mqtt_url],
-                        "rn": "sub"
+                        "rn": "sub-" + local_ip_no_points
                     }
                 }
                 onem2m.create_resource(f"http://{ip}:8000/onem2m/lightbulb/state", REQUEST_BODY)
@@ -322,7 +325,7 @@ def run_mqtt_client():
                         "m2m:cin": {
                             "cnf": "text/plain:0",
                             "con": ip,
-                            "rn": f"lightbulb_{ip}_{uuid.uuid4().hex[:8]}"
+                            "rn": f"lightbulb_{ip}_{int(time.time()*1000)}"
                         }
                     }
                     onem2m.create_resource(SWITCH_CNT, request_body)

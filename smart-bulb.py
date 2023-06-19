@@ -4,10 +4,10 @@ from flask import Flask, render_template, jsonify
 from flask_socketio import SocketIO, emit
 from flask_cors import CORS
 import paho.mqtt.client as mqtt
-import uuid
 import json
 from threading import Thread
 import signal
+import time
 
 app = Flask(__name__)
 CORS(app, origins='*', methods=['GET', 'POST'], allow_headers='Content-Type')
@@ -20,7 +20,7 @@ def cleanup(sig, frame):
         "m2m:cin": {
             "cnf": "text/plain:0",
             "con": "null",
-            "rn": f"lightbulb_{local_ip}_{uuid.uuid4().hex[:8]}"
+            "rn": f"lightbulb_{local_ip}_{int(time.time()*1000)}"
         }
     }
     onem2m.create_resource(LIGHTBULB_CNT, request_body)
@@ -81,7 +81,7 @@ request_body = {
     "m2m:cin": {
         "cnf": "text/plain:0",
         "con": "off",
-        "rn": f"lightbulb_{local_ip}_{uuid.uuid4().hex[:8]}"
+        "rn": f"lightbulb_{local_ip}_{int(time.time()*1000)}"
     }
 }
 onem2m.create_resource(LIGHTBULB_CNT, request_body)
