@@ -1,11 +1,32 @@
 import utils.discovery as discovery
 import utils.onem2m as onem2m
 from flask import Flask, render_template, jsonify
+from flask_socketio import SocketIO, emit
 from flask_cors import CORS
-import websockets
+import paho.mqtt.client as mqtt
+import uuid
+import json
+from threading import Thread
+import signal
 
 app = Flask(__name__)
 CORS(app, origins='*', methods=['GET', 'POST'], allow_headers='Content-Type')
+socketio = SocketIO(app, cors_allowed_origins='*')
+
+# Define Cleanup method
+def cleanup(sig, frame):
+    global local_ip
+    request_body = {
+        "m2m:cin": {
+            "cnf": "text/plain:0",
+            "con": "null",
+            "rn": f"lightbulb_{local_ip}_{uuid.uuid4().hex[:8]}"
+        }
+    }
+    onem2m.create_resource(LIGHTBULB_CNT, request_body)
+    exit(0)
+
+signal.signal(signal.SIGINT, cleanup)
 
 # ------- Procedure List -------
 # 1. Find Local IP
@@ -59,7 +80,19 @@ onem2m.create_resource(LIGHTBULB_AE, request_body)
 request_body = {
     "m2m:cin": {
         "cnf": "text/plain:0",
-        "con": "{\"state\": \"off\"}"
+        "con": "off",
+        "rn": f"lightbulb_{local_ip}_{uuid.uuid4().hex[:8]}"
+    }
+}
+onem2m.create_resource(LIGHTBULB_CNT, request_body)
+
+
+# ==================== CREATE SUB ====================
+
+request_body = {
+    "m2m:sub": {
+        "nu": ["mqtt://" + local_ip + ":1883"],
+        "rn": "self-sub"
     }
 }
 onem2m.create_resource(LIGHTBULB_CNT, request_body)
@@ -84,20 +117,67 @@ def home():
 @app.route('/state')
 def state():
     last_bulb_state = onem2m.get_resource(f"{LIGHTBULB_CNT}/la")
-    return jsonify(last_bulb_state)
+    return jsonify({"state": last_bulb_state["m2m:cin"]["con"]})
+
+@socketio.on('connect')
+def on_connect():
+    print(f"[WebSocket]: Connection established")
+
+# Create CIN to Add Bulb to Every Discovered Switch
+for smart_switch_ip in smart_switch_ips:
+    request_body = {
+        "m2m:cin": {
+            "cnf": "text/plain:0",
+            "con": local_ip,
+            "rn": local_ip
+        }
+    }
+    onem2m.create_resource(f"http://{smart_switch_ip}:8000/onem2m/switch/lightbulbs", request_body)
+    
+
+client = mqtt.Client()
+
+# Function to run MQTT client loop
+def run_mqtt_client():
+    topic = "/onem2m/lightbulb/state/self-sub"
+
+    def on_connect(client, userdata, flags, rc):
+        if rc == 0:
+            client.subscribe(topic)
+            print(f"[MQTT]: Listening for changes...")
+
+    def on_message(client, userdata, message):
+        if message.topic != topic:
+            return
+
+        state = json.loads(message.payload.decode('utf-8').replace('\x00', ''))
+        if ("m2m:cin" in str(state["m2m:sgn"]["nev"]["rep"])):
+            socketio.emit('state', state["m2m:sgn"]["nev"]["rep"]["m2m:cin"]["con"])
+            print(f"[MQTT]: State {state}")   
+
+    client.on_connect = on_connect
+    client.on_message = on_message
+
+    client.connect(local_ip)
+    client.loop_start()
+
+# Function to run SocketIO server
+def run_socketio_server():
+    socketio.run(app, host='0.0.0.0', port=8080)
 
 if __name__ == '__main__':
-    for smart_switch_ip in smart_switch_ips:
-        ws = websocket.WebSocketApp(f"ws://{smart_switch_ip}:8081")
-        def on_open(ws):
-            print(f"[WebSocket]: {smart_switch_ip} - Connection established")
-            ws.send(smart_switch_ip)
-            print(f"[WebSocket]: {smart_switch_ip} - Message sent \"{smart_switch_ip}\"")
 
-        # Set the callback function
-        ws.on_open = on_open
+    # Create separate threads for MQTT client and SocketIO server
+    mqtt_thread = Thread(target=run_mqtt_client)
+    socketio_thread = Thread(target=run_socketio_server)
 
-        # Start the WebSocket connection
-        ws.run_forever()
+    # Start the threads
+    mqtt_thread.start()
+    socketio_thread.start()
 
-    app.run(host='0.0.0.0', port=8080)
+    # Wait for both threads to complete
+    mqtt_thread.join()
+    socketio_thread.join()
+
+    # Stop MQTT client loop
+    client.loop_stop()

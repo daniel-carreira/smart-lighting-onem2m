@@ -1,78 +1,116 @@
-const API_URL = 'http://localhost:8080'
-const WS_URL = 'ws://localhost:8081'
+const HOST = window.location.host
+
+const API_URL = `http://${HOST}`
+const WS_URL = `ws://${HOST}`
+
+// Socket IO
+var socket = io(WS_URL);
+socket.on('connect', () => {
+  console.log("[WS]: Connection established")
+});
+
+socket.on('state', (message) => {
+  updateBulb(message.ip, message.state)
+  console.log("Toggle action completed")
+})
+
+socket.on('target', (message) => {
+  targetBulb(message.ip)
+  console.log("Next action completed")
+})
+
+socket.on('add', (message) => {
+  createBulb(message)
+  updateUI()
+})
+
+socket.on('remove', (message) => {
+  removeBulb(message.ip)
+  updateUI()
+})
+
+// Axios config
+axios.defaults.baseURL = API_URL
+axios.defaults.headers.post['Accept'] = 'application/json'
+
 
 const lookingElement = document.getElementsByTagName("h1")[0]
 const containerElement = document.getElementsByClassName("container-switch")[0]
 const actionButtonsElement = document.getElementsByClassName("fixed-buttons")[0]
 
-// Axios config
-axios.defaults.baseURL = API_URL
-axios.defaults.headers.post['Content-Type'] = 'application/json';
-axios.defaults.headers.post['Accept'] = 'application/json'
-
-// Web Sockets
-const socket = new WebSocket(WS_URL);
-
-// Connection established event
-socket.addEventListener('open', () => {
-  console.log('Connected to the WebSocket server');
-
-  // Send a message to the server
-  socket.send('Hello, server!');
-});
-
-// Message received event
-socket.addEventListener('message', (event) => {
-  const message = event.data;
-  console.log(`Received message: ${message}`);
-});
-
-// Connection closed event
-socket.addEventListener('close', () => {
-  console.log('Connection closed');
-});
 
 let currentIndex = 0;
 let smartBulbs = [];
 
+function createBulb(bulb) {
+  smartBulbs.push(bulb)
+
+  isON = bulb.state == "on"
+
+  // Create Lightbulb Div
+  const bulbContainer = document.createElement("div")
+  bulbContainer.classList.add("container-lightbulb")
+
+  // Add the "current" class
+  if (bulb.current) {
+    bulbContainer.classList.add("current")
+  }
+
+  // Create the smart-bulb label
+  const bulbLabel = document.createElement("h2")
+  bulbLabel.textContent = bulb.ip
+  bulbContainer.appendChild(bulbLabel)
+
+  // Create the smart-bulb image
+  const bulbImg = document.createElement("img")
+  bulbImg.src = isON ? "/static/icons/light-on.png" : "/static/icons/light-off.png"
+  bulbContainer.appendChild(bulbImg)
+
+  // Append the smart-bulb container to the container element
+  containerElement.appendChild(bulbContainer)
+}
+
+function updateUI() {
+  if (smartBulbs.length > 0) {
+    lookingElement.style.display = "none"
+    actionButtonsElement.style.display = "inline"
+  }
+  else {
+    lookingElement.style.display = "inline"
+    actionButtonsElement.style.display = "none"
+  }
+}
+
+function updateBulb(ip, state) {
+  index = 0
+  smartBulbs.forEach((item, idx) => {
+    if (item.ip == ip) {
+      index = idx
+      return
+    }
+  })
+  let containers = document.querySelectorAll(".container-lightbulb");
+  to_update = containers[index]
+
+  imgElem = to_update.getElementsByTagName("img")[0]
+  isON = state == "on"
+  imgElem.src = isON ? "/static/icons/light-on.png" : "/static/icons/light-off.png"
+}
+
 // Get Current Bulbs
 async function getBulb() {
 	return axios
-		.get("bulbs")
+		.get("/bulbs")
 		.then(function (response) {
-      smartBulbs = response.data
+      let bulbs = response.data
 
-      if (smartBulbs.length > 0) {
-        lookingElement.style.display = "none"
-        actionButtonsElement.style.display = "inline"
+      if (bulbs.length > 0){
+        bulbs.forEach((bulb, index) => {
+          createBulb(bulb)
+          currentIndex = bulb.current ? index : currentIndex
+        })
       }
-
-      smartBulbs.forEach((bulb, index) => {
-        isON = bulb.state == "on"
-
-        // Create Lightbulb Div
-        const bulbContainer = document.createElement("div");
-        bulbContainer.classList.add("container-lightbulb");
-
-        // Add the "current" class
-        if (bulb.current) {
-          currentIndex = index
-          bulbContainer.classList.add("current");
-        }
-
-        // Create the smart-bulb label
-        const bulbLabel = document.createElement("h2");
-        bulbLabel.textContent = bulb.ip;
-        bulbContainer.appendChild(bulbLabel);
-
-        // Create the smart-bulb image
-        const bulbImg = document.createElement("img");
-        bulbImg.src = isON ? "/static/icons/light-on.png" : "/static/icons/light-off.png"
-        bulbContainer.appendChild(bulbImg);
-
-        // Append the smart-bulb container to the container element
-        containerElement.appendChild(bulbContainer);
-      })
+      updateUI()
 		})
 		.catch(error => {
 			console.log(error)
@@ -81,38 +119,50 @@ async function getBulb() {
 getBulb()
 
 async function toggle() {
-  ip = smartBulbs[currentIndex].ip
-
-  return axios.post("toggle", {"state": ip})
-    .then(response => {
-      isON = response.data.state == "on"
-
-      imgs = document.querySelectorAll(".container-lightbulb img");
-      imgs[currentIndex].src = isON ? "/static/icons/light-on.png" : "/static/icons/light-off.png"
-    })
-    .catch(error => {
+  axios
+		.post("/toggle")
+		.then(function (response) {
+			console.log("Toggle action requested")
+      console.log(response.data)
+      const isON = response.data.state === 'on';
+      const imgs = document.querySelectorAll(".container-lightbulb img");
+      imgs[currentIndex].src = isON ? "/static/icons/light-on.png" : "/static/icons/light-off.png";
+		})
+		.catch(function (error) {
 			console.log(error)
 		})
 }
 
-function next() {
-  return axios.post("next")
-    .then(response => {
-      ip = response.data.state
-      index = smartBulbs.find( item => item.ip == ip)
+function targetBulb(ip) {
+  //ip = response.data.ip;
+  const index = smartBulbs.findIndex(item => item.ip === ip);
 
-      currentIndex = index
-      let containers = document.querySelectorAll(".container-lightbulb");
-      containers.forEach( container => {
-        container.classList.remove("current");
-      })
+  currentIndex = index;
+  const containers = document.querySelectorAll(".container-lightbulb");
+  containers.forEach(container => {
+    container.classList.remove("current");
+  });
 
-      containers[currentIndex].classList.add("current");
-    })
-    .catch(error => {
-      console.log(error)
-    })
+  containers[currentIndex].classList.add("current");
 }
+
+async function next() {
+  axios
+		.post("/next")
+		.then(function (response) {
+			console.log("Next action requested")
+		})
+		.catch(function (error) {
+			console.log(error)
+		})
+}
+
+function removeBulb(ip) {
+  const index = smartBulbs.findIndex(item => item.ip === ip);
+  const containers = document.querySelectorAll(".container-lightbulb");
+  containers[index].remove()
+}
+
 
 document.getElementById("toggle").addEventListener('click', toggle);
 document.getElementById("next").addEventListener('click', next);
