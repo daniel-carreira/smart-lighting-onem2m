@@ -15,13 +15,15 @@ Smart home automation systems have the potential to revolutionize the way we int
 Supported only by **MacOS** or **Linux**.
 
 1. Start the OneM2M instance **[Every device]**;
-    > cd TinyOneM2M
-    > makefile
-    > ./server
+   ```bash
+   > cd TinyOneM2M
+   > makefile
+   > ./server
+   ```
 
-2. Start MQTT instance in **[Switch]**;
-3. Run ```python smart-switch.py``` **[Switch]**;
-4. Run ```python smart-bulb.py``` **[Light Bulb]**;
+3. Start MQTT instance in **[Switch]**;
+4. Run ```python smart-switch.py``` **[Switch]**;
+5. Run ```python smart-bulb.py``` **[Light Bulb]**;
 
 ## Docs
 [Report](/docs/report.pdf)
